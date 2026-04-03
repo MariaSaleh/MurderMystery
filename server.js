@@ -1,0 +1,373 @@
+const fs = require('fs');
+const http = require('http');
+const crypto = require('crypto');
+const path = require('path');
+const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const multer = require('multer');
+const { Server } = require('socket.io');
+
+const db = require('./data/database');
+const DatabaseService = require('./data/DatabaseService');
+const { syncScenariosFromJson } = require('./data/syncScenariosFromJson');
+const { createExtensionState } = require('./data/sessionExtensions');
+const { attachSessionFeatureHandlers } = require('./socket/sessionFeatureHandlers');
+const { timingSafeEqualToken } = require('./serverRoomUtils');
+const GameManager = require('./classes/GameManager');
+
+const PORT = Number(process.env.PORT) || 3000;
+const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+const app = express();
+
+/** Isolated session state per room code — each group is independent. */
+const rooms = new Map();
+
+app.set('trust proxy', 1);
+
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'", 'https://fonts.googleapis.com'],
+                fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+                imgSrc: ["'self'", 'data:'],
+                connectSrc: ["'self'"],
+                baseUri: ["'self'"],
+                formAction: ["'self'"],
+                frameAncestors: ["'none'"],
+            },
+        },
+        crossOriginEmbedderPolicy: false,
+    })
+);
+
+const limiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use(limiter);
+
+const uploadRoot = path.join(__dirname, 'uploads');
+const upload = multer({
+    storage: multer.diskStorage({
+        destination(req, _file, cb) {
+            const dir = path.join(uploadRoot, 'sessions', req.params.sessionId);
+            fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename(_req, file, cb) {
+            const ext = path.extname(file.originalname || '') || '';
+            cb(null, `${crypto.randomUUID()}${ext}`);
+        },
+    }),
+    limits: { fileSize: 12 * 1024 * 1024 },
+});
+
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+function findRoomBySessionId(sessionId) {
+    for (const room of rooms.values()) {
+        if (room.sessionId === sessionId) {
+            return room;
+        }
+    }
+    return null;
+}
+
+app.use('/uploads', express.static(uploadRoot));
+
+app.post('/api/sessions/:sessionId/upload', uploadLimiter, upload.single('file'), (req, res) => {
+    const { sessionId } = req.params;
+    const room = findRoomBySessionId(sessionId);
+    if (!room) {
+        return res.status(404).json({ ok: false, error: 'Session not found.' });
+    }
+    const token = req.headers['x-host-token'];
+    if (typeof token !== 'string' || !timingSafeEqualToken(token, room.hostToken)) {
+        return res.status(403).json({ ok: false, error: 'Forbidden.' });
+    }
+    if (!req.file) {
+        return res.status(400).json({ ok: false, error: 'No file uploaded.' });
+    }
+    const publicUrl = `/uploads/sessions/${sessionId}/${req.file.filename}`;
+    const meta = {
+        id: crypto.randomUUID(),
+        originalName: req.file.originalname || 'file',
+        url: publicUrl,
+        uploadedAt: Date.now(),
+    };
+    room.extensions.documents.push(meta);
+    res.json({ ok: true, document: meta });
+});
+
+app.use(express.static(path.join(__dirname, 'public'), { index: 'index.html', extensions: ['html'] }));
+
+app.get('/health', (_req, res) => {
+    res.json({ ok: true });
+});
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+    cors: {
+        origin: false,
+    },
+});
+
+function generateRoomCode() {
+    let code = '';
+    for (let i = 0; i < 6; i += 1) {
+        code += ROOM_CODE_CHARS[crypto.randomInt(0, ROOM_CODE_CHARS.length)];
+    }
+    return rooms.has(code) ? generateRoomCode() : code;
+}
+
+function sanitizeDisplayName(raw) {
+    if (typeof raw !== 'string') {
+        return null;
+    }
+    const trimmed = raw.trim().replace(/\s+/g, ' ');
+    if (trimmed.length < 1 || trimmed.length > 40) {
+        return null;
+    }
+    if (/[<>]/.test(trimmed)) {
+        return null;
+    }
+    return trimmed;
+}
+
+function getRoomOrEmitError(socket, roomCode, eventName) {
+    const room = rooms.get(roomCode);
+    if (!room) {
+        socket.emit(eventName, { ok: false, error: 'Room not found or expired.' });
+        return null;
+    }
+    return room;
+}
+
+function broadcastLobby(roomCode, room) {
+    const names = room.game ? room.game.getPlayerNames() : Array.from(room.prePlayers.values());
+    io.to(roomCode).emit('lobby:players', names);
+}
+
+io.on('connection', (socket) => {
+    let joinedRoom = null;
+
+    attachSessionFeatureHandlers(socket, io, rooms);
+
+    socket.on('catalog:request', () => {
+        DatabaseService.getCatalog()
+            .then((catalog) => {
+                socket.emit('catalog:data', catalog);
+            })
+            .catch((e) => {
+                console.error('[catalog]', e);
+                socket.emit('catalog:data', []);
+            });
+    });
+
+    socket.on('room:create', (payload) => {
+        const hostName = sanitizeDisplayName(payload?.hostName);
+        if (!hostName) {
+            socket.emit('room:createResult', { ok: false, error: 'Enter your name as host (1–40 characters).' });
+            return;
+        }
+        const roomCode = generateRoomCode();
+        const hostToken = crypto.randomBytes(32);
+        const sessionId = crypto.randomUUID();
+        rooms.set(roomCode, {
+            sessionId,
+            hostSocketId: socket.id,
+            hostDisplayName: hostName,
+            hostToken,
+            game: null,
+            scenarioMeta: null,
+            prePlayers: new Map(),
+            extensions: createExtensionState(),
+        });
+        socket.join(roomCode);
+        joinedRoom = roomCode;
+        socket.emit('room:created', {
+            roomCode,
+            sessionId,
+            role: 'admin',
+            hostToken: hostToken.toString('hex'),
+        });
+        socket.emit('room:createResult', { ok: true });
+        broadcastLobby(roomCode, rooms.get(roomCode));
+    });
+
+    socket.on('room:join', (payload) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const name = sanitizeDisplayName(payload?.name);
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            socket.emit('room:joinResult', { ok: false, error: 'Enter a valid 6-character room code.' });
+            return;
+        }
+        if (!name) {
+            socket.emit('room:joinResult', { ok: false, error: 'Enter a display name (1–40 characters).' });
+            return;
+        }
+        const room = rooms.get(roomCode);
+        if (!room) {
+            socket.emit('room:joinResult', { ok: false, error: 'Room not found. Check the code with your host.' });
+            return;
+        }
+        socket.join(roomCode);
+        joinedRoom = roomCode;
+        if (room.game) {
+            room.game.addPlayer(socket.id, name);
+        } else {
+            room.prePlayers.set(socket.id, name);
+        }
+        broadcastLobby(roomCode, room);
+        socket.emit('room:joinResult', {
+            ok: true,
+            roomCode,
+            sessionId: room.sessionId,
+            role: 'player',
+            scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
+        });
+    });
+
+    socket.on('scenario:mount', (payload) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const scenarioId = typeof payload?.scenarioId === 'string' ? payload.scenarioId : '';
+        const hostToken = typeof payload?.hostToken === 'string' ? payload.hostToken : '';
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            socket.emit('scenario:mountResult', { ok: false, error: 'Invalid room.' });
+            return;
+        }
+        const room = getRoomOrEmitError(socket, roomCode, 'scenario:mountResult');
+        if (!room) {
+            return;
+        }
+        if (!timingSafeEqualToken(hostToken, room.hostToken)) {
+            socket.emit('scenario:mountResult', { ok: false, error: 'Not authorized to run this room.' });
+            return;
+        }
+        DatabaseService.getScenarioById(scenarioId)
+            .then((data) => {
+                if (!data) {
+                    socket.emit('scenario:mountResult', { ok: false, error: 'Unknown scenario.' });
+                    return;
+                }
+                if (room.game && room.game.state !== 'LOBBY') {
+                    socket.emit('scenario:mountResult', { ok: false, error: 'The investigation has already begun.' });
+                    return;
+                }
+                let gm;
+                if (room.game) {
+                    const preserved = Array.from(room.game.players.entries())
+                        .filter(([id]) => id !== room.hostSocketId)
+                        .map(([id, pl]) => [id, pl.name]);
+                    gm = new GameManager(io, data, roomCode);
+                    preserved.forEach(([id, name]) => gm.addPlayer(id, name));
+                } else {
+                    gm = new GameManager(io, data, roomCode);
+                    for (const [sid, pname] of room.prePlayers) {
+                        if (sid !== room.hostSocketId) {
+                            gm.addPlayer(sid, pname);
+                        }
+                    }
+                    room.prePlayers.clear();
+                }
+                room.game = gm;
+                room.scenarioMeta = { id: data.id, title: data.title };
+                io.to(roomCode).emit('scenario:mounted', {
+                    title: data.title,
+                    description: data.description,
+                    theme: data.theme || null,
+                });
+                broadcastLobby(roomCode, room);
+                socket.emit('scenario:mountResult', { ok: true });
+            })
+            .catch((e) => {
+                console.error('[scenario:mount]', e);
+                socket.emit('scenario:mountResult', { ok: false, error: 'Could not load scenario.' });
+            });
+    });
+
+    socket.on('game:start', (payload) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const hostToken = typeof payload?.hostToken === 'string' ? payload.hostToken : '';
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            socket.emit('game:startResult', { ok: false, error: 'Invalid room.' });
+            return;
+        }
+        const room = getRoomOrEmitError(socket, roomCode, 'game:startResult');
+        if (!room) {
+            return;
+        }
+        if (!timingSafeEqualToken(hostToken, room.hostToken)) {
+            socket.emit('game:startResult', { ok: false, error: 'Not authorized to start the game.' });
+            return;
+        }
+        if (!room.game) {
+            socket.emit('game:startResult', { ok: false, error: 'Select a scenario first.' });
+            return;
+        }
+        const result = room.game.startGame();
+        if (!result.success) {
+            socket.emit('game:startResult', { ok: false, error: result.error || 'Cannot start.' });
+            return;
+        }
+        io.to(roomCode).emit('game:started', {
+            scenarioTitle: room.game.scenario.title,
+            sessionId: room.sessionId,
+        });
+        socket.emit('game:startResult', { ok: true });
+    });
+
+    socket.on('disconnect', () => {
+        if (!joinedRoom) {
+            return;
+        }
+        const room = rooms.get(joinedRoom);
+        if (!room) {
+            return;
+        }
+        if (socket.id === room.hostSocketId) {
+            io.to(joinedRoom).emit('session:ended', {
+                reason: 'host_left',
+                message: 'The host left; this session has ended.',
+            });
+            rooms.delete(joinedRoom);
+            return;
+        }
+        if (room.game) {
+            room.game.removePlayer(socket.id);
+            broadcastLobby(joinedRoom, room);
+        } else {
+            room.prePlayers.delete(socket.id);
+            broadcastLobby(joinedRoom, room);
+        }
+    });
+});
+
+db.initDatabase((err) => {
+    if (err) {
+        console.error('[database]', err);
+        process.exit(1);
+    }
+    syncScenariosFromJson((e2) => {
+        if (e2) {
+            console.error('[sync]', e2);
+            process.exit(1);
+        }
+        server.listen(PORT, () => {
+            console.log(`Murder Mystery server listening on http://localhost:${PORT}`);
+        });
+    });
+});

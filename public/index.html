@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Real-time murder mystery sessions for your table.">
+    <title>Velvet &amp; Alibi — Murder Mystery</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="brand">
+            <h1 class="brand__mark">Velvet &amp; Alibi</h1>
+            <p class="brand__tag">Murder mystery · live sessions</p>
+        </header>
+
+        <div id="global-error" class="msg msg--error hidden" role="alert"></div>
+
+        <section id="view-entry" class="panel">
+            <h2 class="panel-title">Welcome</h2>
+            <p class="panel-lead">Host a new case for your group, or join with a six-letter room code.</p>
+            <div class="btn-row">
+                <button type="button" class="btn btn--primary" id="btn-goto-host">Host a room</button>
+                <button type="button" class="btn btn--ghost" id="btn-goto-join">Join a room</button>
+            </div>
+        </section>
+
+        <section id="view-host-flow" class="hidden">
+            <div id="step-host-1" class="panel">
+                <button type="button" class="btn btn--ghost" id="btn-back-entry" style="margin-bottom: 1rem;">← Back</button>
+                <h2 class="panel-title">Host this evening</h2>
+                <p class="panel-lead">You are the room admin — you run the session and do not receive a character. Guests need their own devices.</p>
+                <div class="field">
+                    <label for="host-name-create">Your name</label>
+                    <input type="text" id="host-name-create" name="hostName" autocomplete="nickname" maxlength="40" placeholder="e.g. Jordan">
+                </div>
+                <button type="button" class="btn btn--primary" id="btn-create-room">Create room</button>
+            </div>
+
+            <div id="step-host-2" class="panel hidden">
+                <h2 class="panel-title">Share the code</h2>
+                <p class="panel-lead">Guests enter this on their devices. Then choose a case file.</p>
+                <div class="room-code-box">
+                    <div id="room-code-display" class="room-code" aria-live="polite"></div>
+                    <button type="button" class="btn btn--primary btn--inline" id="btn-copy-code">Copy</button>
+                </div>
+                <p class="panel-lead" style="margin-top: 1.25rem;">Select scenario</p>
+                <p id="selected-scenario-label" class="panel-lead" style="margin-top: 0; color: var(--gold); font-style: italic;"></p>
+                <div id="scenario-list" class="scenario-grid"></div>
+            </div>
+        </section>
+
+        <section id="view-join-flow" class="panel hidden">
+            <button type="button" class="btn btn--ghost" id="btn-back-entry-join" style="margin-bottom: 1rem;">← Back</button>
+            <h2 class="panel-title">Join a case</h2>
+            <p class="panel-lead">Ask your host for the room code.</p>
+            <div class="field">
+                <label for="join-name">Your name</label>
+                <input type="text" id="join-name" name="displayName" autocomplete="nickname" maxlength="40" placeholder="Your name">
+            </div>
+            <div class="field">
+                <label for="join-code">Room code</label>
+                <input type="text" id="join-code" name="roomCode" autocomplete="off" maxlength="6" placeholder="e.g. ABC12D" style="text-transform: uppercase;">
+            </div>
+            <button type="button" class="btn btn--primary" id="btn-join-room">Enter lobby</button>
+        </section>
+
+        <section id="view-lobby" class="panel hidden">
+            <h2 class="panel-title" id="lobby-title">Lobby</h2>
+            <p class="panel-lead" id="lobby-subtitle">The host will choose a case.</p>
+            <p class="panel-lead admin-hint hidden" id="lobby-admin-hint">You are the admin — you will not receive a dossier.</p>
+            <p class="player-list-label" id="player-list-label">Guest players</p>
+            <ul id="player-list" class="player-list" aria-label="Guest players in this session"></ul>
+            <button type="button" class="btn btn--primary hidden" id="btn-start-game">Begin investigation</button>
+        </section>
+
+        <section id="view-admin" class="panel hidden admin-dashboard">
+            <h2 class="panel-title">Session control</h2>
+            <p class="panel-lead" id="admin-case-line"></p>
+            <p class="panel-lead">Investigations, targeted clues, notifications, shared documents, and agent chat will plug in here. Channels below receive live events from the server.</p>
+            <div class="admin-grid">
+                <div class="admin-card">
+                    <h3 class="admin-card__title">Investigation state</h3>
+                    <pre id="admin-investigation" class="admin-pre">—</pre>
+                </div>
+                <div class="admin-card">
+                    <h3 class="admin-card__title">Room chat</h3>
+                    <div id="admin-chat-log" class="admin-chat-log"></div>
+                </div>
+                <div class="admin-card">
+                    <h3 class="admin-card__title">Shared documents</h3>
+                    <ul id="admin-doc-list" class="admin-doc-list"></ul>
+                    <button type="button" class="btn btn--ghost btn--small" id="btn-refresh-docs">Refresh list</button>
+                </div>
+            </div>
+        </section>
+
+        <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+        <section id="view-game" class="panel hidden game-view">
+            <p class="case-label" id="game-case-title"></p>
+            <h2 class="char-name" id="game-char-name"></h2>
+            <p class="char-bio" id="game-char-bio"></p>
+            <div id="killer-banner" class="killer-banner hidden">You carry the guilt. Reveal nothing that would undo you.</div>
+            <div class="secret-block">
+                <div class="label">Your secret</div>
+                <p class="text" id="game-char-secret"></p>
+            </div>
+            <div id="player-chat-feed" class="player-chat-feed hidden" aria-label="Room messages"></div>
+        </section>
+
+        <p class="footer-note">Tips stay on this device. Do not refresh during a session.</p>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>
