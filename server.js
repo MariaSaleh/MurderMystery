@@ -28,21 +28,7 @@ app.set('trust proxy', 1);
 
 app.use(
     helmet({
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'"],
-                scriptSrc: ["'self'", "'unsafe-inline'"],
-                styleSrc: ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
-                fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-                imgSrc: ["'self'", 'data:'],
-                connectSrc: ["'self'"],
-                baseUri: ["'self'"],
-                formAction: ["'self'"],
-                frameAncestors: ["'none'"],
-                manifestSrc: ["'self'"],
-                workerSrc: ["'self'"],
-            },
-        },
+        contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
     })
 );
