@@ -9,9 +9,9 @@
         { "name": "The Conductor", "bio": "He sees everything.", "secret": "You took a bribe." }
     ],
     "events": [
-        "The train lurches violently, then stops with a shudder.",
-        "A blood-curdling scream echoes from the dining car.",
-        "The conductor announces a delay due to a snowdrift on the tracks.",
-        "A shadowy figure is seen moving along the outside of the train."
+        { "title": "Sudden Stop", "text": "The train lurches violently, then stops with a shudder." },
+        { "title": "Echoing Scream", "text": "A blood-curdling scream echoes from the dining car." },
+        { "title": "Conductor's Announcement", "text": "The conductor announces a delay due to a snowdrift on the tracks." },
+        { "title": "Shadowy Figure", "text": "A shadowy figure is seen moving along the outside of the train." }
     ]
 }

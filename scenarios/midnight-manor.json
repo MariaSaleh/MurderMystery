@@ -9,9 +9,9 @@
         { "name": "The Doctor", "bio": "Steady hands; a valise full of powders.", "secret": "You brought the wrong phial on purpose." }
     ],
     "events": [
-        "The lights flicker and die, plunging the room into darkness for a moment.",
-        "A distant scream is heard from upstairs.",
-        "A floorboard creaks in the hallway outside.",
-        "The sound of a window being smashed is heard from the library."
+        { "title": "Lights Out", "text": "The lights flicker and die, plunging the room into darkness for a moment." },
+        { "title": "Distant Scream", "text": "A distant scream is heard from upstairs." },
+        { "title": "Creaking Floorboard", "text": "A floorboard creaks in the hallway outside." },
+        { "title": "Smashed Window", "text": "The sound of a window being smashed is heard from the library." }
     ]
 }
