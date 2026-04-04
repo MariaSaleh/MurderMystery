@@ -1,5 +1,5 @@
 const fs = require('fs');
-const http = require('http');
+const https = require('https');
 const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
@@ -32,7 +32,7 @@ app.use(
             directives: {
                 defaultSrc: ["'self'"],
                 scriptSrc: ["'self'", "'unsafe-inline'"],
-                styleSrc: ["'self'", 'https://fonts.googleapis.com'],
+                styleSrc: ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
                 fontSrc: ["'self'", 'https://fonts.gstatic.com'],
                 imgSrc: ["'self'", 'data:'],
                 connectSrc: ["'self'"],
@@ -127,7 +127,10 @@ app.get('/health', (_req, res) => {
     res.json({ ok: true });
 });
 
-const server = http.createServer(app);
+const privateKey = fs.readFileSync(path.join(__dirname, 'certs/key.pem'), 'utf8');
+const certificate = fs.readFileSync(path.join(__dirname, 'certs/cert.pem'), 'utf8');
+const credentials = { key: privateKey, cert: certificate };
+const server = https.createServer(credentials, app);
 
 const io = new Server(server, {
     cors: {
@@ -318,7 +321,7 @@ io.on('connection', (socket) => {
                 io.to(roomCode).emit('scenario:mounted', {
                     title: fullScenario.title,
                     description: fullScenario.description,
-                    theme: fullScenario.theme || null,
+                    theme: full.theme || null,
                 });
 
                 broadcastLobby(roomCode, room);
@@ -430,7 +433,25 @@ db.initDatabase((err) => {
             process.exit(1);
         }
         server.listen(PORT, () => {
-            console.log(`Murder Mystery server listening on http://localhost:${PORT}`);
+            const { networkInterfaces } = require('os');
+            const nets = networkInterfaces();
+            const addresses = [];
+            for (const name of Object.keys(nets)) {
+                for (const net of nets[name]) {
+                    if (net.family === 'IPv4' && !net.internal) {
+                        addresses.push(net.address);
+                    }
+                }
+            }
+
+            console.log(`Murder Mystery server listening on https://localhost:${PORT}`);
+            if (addresses.length > 0) {
+              console.log('To access from your phone, open the following URL(s):');
+              addresses.forEach(addr => {
+                console.log(`- https://${addr}:${PORT}`);
+              });
+              console.log('You will need to accept the self-signed certificate on your device.');
+            }
         });
     });
 });
