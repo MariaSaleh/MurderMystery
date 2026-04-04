@@ -252,7 +252,20 @@
     }
 
     socket.on('catalog:data', (list) => {
-        state.catalog = Array.isArray(list) ? list : [];
+        state.catalog = (Array.isArray(list) ? list : []).map(item => {
+            if (typeof item.events_json === 'string') {
+                try {
+                    item.events = JSON.parse(item.events_json);
+                } catch (e) {
+                    console.error('Could not parse events_json', e);
+                    item.events = [];
+                }
+            } else {
+                item.events = item.events_json || [];
+            }
+            return item;
+        });
+
         els.scenarioList.innerHTML = '';
         state.catalog.forEach((s) => {
             const btn = document.createElement('button');
