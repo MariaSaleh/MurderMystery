@@ -330,6 +330,42 @@ io.on('connection', (socket) => {
         socket.emit('game:startResult', { ok: true });
     });
 
+    socket.on('admin:event', (payload) => {
+        const { roomCode, hostToken, message, user } = payload;
+
+        if (typeof roomCode !== 'string' || !/^[A-Z0-9]{6}$/.test(roomCode)) {
+            return;
+        }
+
+        const room = rooms.get(roomCode);
+        if (!room) {
+            return;
+        }
+
+        if (!timingSafeEqualToken(hostToken, room.hostToken)) {
+            return;
+        }
+
+        if (!message || typeof message !== 'string') {
+            return;
+        }
+
+        const eventPayload = { title: 'Admin Event', body: message };
+
+        if (user && typeof user === 'string') {
+            if (room.game) {
+                for (const [socketId, player] of room.game.players.entries()) {
+                    if (player.name.toLowerCase() === user.toLowerCase()) {
+                        io.to(socketId).emit('feature:notify:toast', eventPayload);
+                        break;
+                    }
+                }
+            }
+        } else {
+            io.to(roomCode).emit('feature:notify:toast', eventPayload);
+        }
+    });
+
     socket.on('disconnect', () => {
         if (!joinedRoom) {
             return;

@@ -95,6 +95,21 @@
                     <ul id="admin-doc-list" class="admin-doc-list"></ul>
                     <button type="button" class="btn btn--ghost btn--small" id="btn-refresh-docs">Refresh list</button>
                 </div>
+                <div class="admin-card">
+                    <h3 class="admin-card__title">Send Event</h3>
+                    <div class="field">
+                        <label for="event-message">Message</label>
+                        <input type="text" id="event-message" name="event-message" autocomplete="off" maxlength="100" placeholder="e.g. The lights flicker">
+                    </div>
+                    <div class="field">
+                        <label for="event-user">Specific User (Optional)</label>
+                        <input type="text" id="event-user" name="event-user" autocomplete="off" maxlength="40" placeholder="e.g. Player1">
+                    </div>
+                    <div class="btn-row">
+                        <button type="button" class="btn btn--primary" id="btn-send-event-user">Send to User</button>
+                        <button type="button" class="btn btn--primary" id="btn-send-event-all">Send to All</button>
+                    </div>
+                </div>
             </div>
         </section>
 

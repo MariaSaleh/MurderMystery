@@ -44,6 +44,10 @@
         btnRefreshDocs: document.getElementById('btn-refresh-docs'),
         playerChatFeed: document.getElementById('player-chat-feed'),
         toastStack: document.getElementById('toast-stack'),
+        btnSendEventUser: document.getElementById('btn-send-event-user'),
+        btnSendEventAll: document.getElementById('btn-send-event-all'),
+        eventMessage: document.getElementById('event-message'),
+        eventUser: document.getElementById('event-user'),
     };
 
     const state = {
@@ -205,6 +209,52 @@
     if (els.btnRefreshDocs) {
         els.btnRefreshDocs.addEventListener('click', () => {
             requestDocumentList();
+        });
+    }
+
+    if (els.btnSendEventUser) {
+        els.btnSendEventUser.addEventListener('click', () => {
+            setError('');
+            const message = els.eventMessage.value.trim();
+            const user = els.eventUser.value.trim();
+            if (!message) {
+                setError('Please enter a message.');
+                return;
+            }
+            if (!user) {
+                setError('Please enter a user.');
+                return;
+            }
+            if (!state.roomCode || !state.hostToken) {
+                setError('Host session missing. Create a room again.');
+                return;
+            }
+            socket.emit('admin:event', {
+                roomCode: state.roomCode,
+                hostToken: state.hostToken,
+                message,
+                user,
+            });
+        });
+    }
+
+    if (els.btnSendEventAll) {
+        els.btnSendEventAll.addEventListener('click', () => {
+            setError('');
+            const message = els.eventMessage.value.trim();
+            if (!message) {
+                setError('Please enter a message.');
+                return;
+            }
+            if (!state.roomCode || !state.hostToken) {
+                setError('Host session missing. Create a room again.');
+                return;
+            }
+            socket.emit('admin:event', {
+                roomCode: state.roomCode,
+                hostToken: state.hostToken,
+                message,
+            });
         });
     }
 
