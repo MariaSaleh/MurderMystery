@@ -167,14 +167,14 @@ io.on('connection', (socket) => {
     attachSessionFeatureHandlers(socket, io, rooms);
 
     socket.on('catalog:request', () => {
-        DatabaseService.getCatalog()
-            .then((catalog) => {
-                socket.emit('catalog:data', catalog);
-            })
-            .catch((e) => {
-                console.error('[catalog]', e);
+        DatabaseService.getScenarios((err, catalog) => {
+            if (err) {
+                console.error('[catalog]', err);
                 socket.emit('catalog:data', []);
-            });
+            } else {
+                socket.emit('catalog:data', catalog);
+            }
+        });
     });
 
     socket.on('room:create', (payload) => {
@@ -257,46 +257,46 @@ io.on('connection', (socket) => {
             socket.emit('scenario:mountResult', { ok: false, error: 'Not authorized to run this room.' });
             return;
         }
-        DatabaseService.getScenarioById(scenarioId)
-            .then((data) => {
-                if (!data) {
-                    socket.emit('scenario:mountResult', { ok: false, error: 'Unknown scenario.' });
-                    return;
-                }
-                if (room.game && room.game.state !== 'LOBBY') {
-                    socket.emit('scenario:mountResult', { ok: false, error: 'The investigation has already begun.' });
-                    return;
-                }
-                let gm;
-                if (room.game) {
-                    const preserved = Array.from(room.game.players.entries())
-                        .filter(([id]) => id !== room.hostSocketId)
-                        .map(([id, pl]) => [id, pl.name]);
-                    gm = new GameManager(io, data, roomCode);
-                    preserved.forEach(([id, name]) => gm.addPlayer(id, name));
-                } else {
-                    gm = new GameManager(io, data, roomCode);
-                    for (const [sid, pname] of room.prePlayers) {
-                        if (sid !== room.hostSocketId) {
-                            gm.addPlayer(sid, pname);
-                        }
-                    }
-                    room.prePlayers.clear();
-                }
-                room.game = gm;
-                room.scenarioMeta = { id: data.id, title: data.title };
-                io.to(roomCode).emit('scenario:mounted', {
-                    title: data.title,
-                    description: data.description,
-                    theme: data.theme || null,
-                });
-                broadcastLobby(roomCode, room);
-                socket.emit('scenario:mountResult', { ok: true });
-            })
-            .catch((e) => {
-                console.error('[scenario:mount]', e);
+        DatabaseService.getScenarioById(scenarioId, (err, data) => {
+            if (err) {
+                console.error('[scenario:mount]', err);
                 socket.emit('scenario:mountResult', { ok: false, error: 'Could not load scenario.' });
+                return;
+            }
+            if (!data) {
+                socket.emit('scenario:mountResult', { ok: false, error: 'Unknown scenario.' });
+                return;
+            }
+            if (room.game && room.game.state !== 'LOBBY') {
+                socket.emit('scenario:mountResult', { ok: false, error: 'The investigation has already begun.' });
+                return;
+            }
+            let gm;
+            if (room.game) {
+                const preserved = Array.from(room.game.players.entries())
+                    .filter(([id]) => id !== room.hostSocketId)
+                    .map(([id, pl]) => [id, pl.name]);
+                gm = new GameManager(io, data, roomCode);
+                preserved.forEach(([id, name]) => gm.addPlayer(id, name));
+            } else {
+                gm = new GameManager(io, data, roomCode);
+                for (const [sid, pname] of room.prePlayers) {
+                    if (sid !== room.hostSocketId) {
+                        gm.addPlayer(sid, pname);
+                    }
+                }
+                room.prePlayers.clear();
+            }
+            room.game = gm;
+            room.scenarioMeta = { id: data.id, title: data.title };
+            io.to(roomCode).emit('scenario:mounted', {
+                title: data.title,
+                description: data.description,
+                theme: data.theme || null,
             });
+            broadcastLobby(roomCode, room);
+            socket.emit('scenario:mountResult', { ok: true });
+        });
     });
 
     socket.on('game:start', (payload) => {
