@@ -226,10 +226,7 @@
             if (els.eventSelect.value === 'custom') {
                 message = els.eventCustomMessage.value.trim();
             } else {
-                const selectedOption = els.eventSelect.options[els.eventSelect.selectedIndex];
-                if (selectedOption) {
-                    message = selectedOption.dataset.text || '';
-                }
+                message = els.eventSelect.value;
             }
 
             if (!message) {
@@ -382,12 +379,11 @@
 
             const scenario = state.catalog.find(c => c.id === state.selectedScenarioId);
             if (scenario && scenario.events) {
-                els.eventSelect.innerHTML = '<option value="">-- Custom Message --</option>';
-                scenario.events.forEach((event, i) => {
+                els.eventSelect.innerHTML = '<option value="">-- Select an event --</option><option value="custom">-- Custom Message --</option>';
+                scenario.events.forEach(event => {
                     const option = document.createElement('option');
-                    option.value = `event-${i}`;
+                    option.value = event.text;
                     option.textContent = event.title;
-                    option.dataset.text = event.text;
                     els.eventSelect.appendChild(option);
                 });
             }
