@@ -32,8 +32,8 @@ function syncScenariosFromJson(callback) {
                 const s = scenarios[idx];
                 idx += 1;
                 db.run(
-                    'INSERT INTO scenarios (id, title, description, theme_json) VALUES (?,?,?,?)',
-                    [s.id, s.title, s.description || '', JSON.stringify(s.theme ?? null)],
+                    'INSERT INTO scenarios (id, title, description, theme_json, events_json) VALUES (?,?,?,?,?)',
+                    [s.id, s.title, s.description || '', JSON.stringify(s.theme ?? null), JSON.stringify(s.events ?? [])],
                     (e2) => {
                         if (e2) {
                             db.run('ROLLBACK');

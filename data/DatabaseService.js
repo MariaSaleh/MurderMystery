@@ -4,7 +4,7 @@ class DatabaseService {
     static getCatalog() {
         return new Promise((resolve, reject) => {
             db.all(
-                'SELECT id, title, description, theme_json FROM scenarios ORDER BY title COLLATE NOCASE',
+                'SELECT id, title, description, theme_json, events_json FROM scenarios ORDER BY title COLLATE NOCASE',
                 [],
                 (err, rows) => {
                     if (err) {
@@ -16,6 +16,7 @@ class DatabaseService {
                             title: r.title,
                             description: r.description,
                             theme: r.theme_json ? safeJsonParse(r.theme_json) : null,
+                            events: r.events_json ? safeJsonParse(r.events_json) : [],
                         }))
                     );
                 }
@@ -28,7 +29,7 @@ class DatabaseService {
             return Promise.resolve(null);
         }
         return new Promise((resolve, reject) => {
-            db.get('SELECT id, title, description, theme_json FROM scenarios WHERE id = ?', [id], (err, scenarioRow) => {
+            db.get('SELECT id, title, description, theme_json, events_json FROM scenarios WHERE id = ?', [id], (err, scenarioRow) => {
                 if (err) {
                     return reject(err);
                 }
@@ -47,6 +48,7 @@ class DatabaseService {
                             title: scenarioRow.title,
                             description: scenarioRow.description,
                             theme: scenarioRow.theme_json ? safeJsonParse(scenarioRow.theme_json) : null,
+                            events: scenarioRow.events_json ? safeJsonParse(scenarioRow.events_json) : [],
                             cast: (castRows || []).map((c) => ({
                                 name: c.name,
                                 bio: c.bio,

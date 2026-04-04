@@ -19,9 +19,15 @@ function migrateIfNeeded(callback) {
             if (e) {
                 return callback(e);
             }
-            const sql = row && row.sql;
-            const isOldIntegerId = sql && /id\s+INTEGER\s+PRIMARY\s+KEY/i.test(sql);
-            if (isOldIntegerId) {
+            if (!row) {
+                return callback(null); // No table, no migration needed
+            }
+            const sql = row.sql;
+            const isOldIntegerId = /id\s+INTEGER\s+PRIMARY\s+KEY/i.test(sql);
+            const hasEventsJson = /events_json/i.test(sql);
+
+            if (isOldIntegerId || !hasEventsJson) {
+                console.log('[database] Schema is outdated, recreating tables.');
                 db.exec('DROP TABLE IF EXISTS characters; DROP TABLE IF EXISTS scenarios;', callback);
             } else {
                 callback(null);
@@ -38,7 +44,8 @@ function createTables(callback) {
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             description TEXT,
-            theme_json TEXT
+            theme_json TEXT,
+            events_json TEXT
         );
         CREATE TABLE IF NOT EXISTS characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
