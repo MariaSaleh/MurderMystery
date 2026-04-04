@@ -7,5 +7,11 @@
         { "name": "The Butler", "bio": "Unseen until needed; remembers every footstep.", "secret": "You tampered with the study door." },
         { "name": "The Widow", "bio": "Mourning in silk; sharper than she looks.", "secret": "You hid a second will." },
         { "name": "The Doctor", "bio": "Steady hands; a valise full of powders.", "secret": "You brought the wrong phial on purpose." }
+    ],
+    "events": [
+        "The lights flicker and die, plunging the room into darkness for a moment.",
+        "A distant scream is heard from upstairs.",
+        "A floorboard creaks in the hallway outside.",
+        "The sound of a window being smashed is heard from the library."
     ]
 }

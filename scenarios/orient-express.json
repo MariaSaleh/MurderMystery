@@ -7,5 +7,11 @@
         { "name": "The Countess", "bio": "Elegant and cold.", "secret": "You are a thief." },
         { "name": "The Colonel", "bio": "A man of war.", "secret": "You are seeking revenge." },
         { "name": "The Conductor", "bio": "He sees everything.", "secret": "You took a bribe." }
+    ],
+    "events": [
+        "The train lurches violently, then stops with a shudder.",
+        "A blood-curdling scream echoes from the dining car.",
+        "The conductor announces a delay due to a snowdrift on the tracks.",
+        "A shadowy figure is seen moving along the outside of the train."
     ]
 }

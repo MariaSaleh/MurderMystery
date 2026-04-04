@@ -331,7 +331,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('admin:event', (payload) => {
-        const { roomCode, hostToken, message, user } = payload;
+        const { roomCode, hostToken, message, users } = payload;
 
         if (typeof roomCode !== 'string' || !/^[A-Z0-9]{6}$/.test(roomCode)) {
             return;
@@ -352,18 +352,17 @@ io.on('connection', (socket) => {
 
         const eventPayload = { title: 'Admin Event', body: message };
 
-        if (user && typeof user === 'string') {
-            if (room.game) {
+        if (users && users.length > 0) {
+            if (users.includes('all')) {
+                io.to(roomCode).emit('feature:notify:toast', eventPayload);
+            } else if (room.game) {
                 for (const [socketId, player] of room.game.players.entries()) {
-                    if (player.name.toLowerCase() === user.toLowerCase()) {
+                    if (users.includes(player.name)) {
                         io.to(socketId).emit('feature:notify:toast', eventPayload);
-                        break;
                     }
                 }
             }
-        } else {
-            io.to(roomCode).emit('feature:notify:toast', eventPayload);
-        }
+        } 
     });
 
     socket.on('disconnect', () => {

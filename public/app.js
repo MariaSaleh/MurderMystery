@@ -44,10 +44,11 @@
         btnRefreshDocs: document.getElementById('btn-refresh-docs'),
         playerChatFeed: document.getElementById('player-chat-feed'),
         toastStack: document.getElementById('toast-stack'),
-        btnSendEventUser: document.getElementById('btn-send-event-user'),
-        btnSendEventAll: document.getElementById('btn-send-event-all'),
-        eventMessage: document.getElementById('event-message'),
-        eventUser: document.getElementById('event-user'),
+        eventSelect: document.getElementById('event-select'),
+        customEventField: document.getElementById('custom-event-field'),
+        eventCustomMessage: document.getElementById('event-custom-message'),
+        eventPlayerList: document.getElementById('event-player-list'),
+        btnSendEvent: document.getElementById('btn-send-event'),
     };
 
     const state = {
@@ -212,48 +213,40 @@
         });
     }
 
-    if (els.btnSendEventUser) {
-        els.btnSendEventUser.addEventListener('click', () => {
-            setError('');
-            const message = els.eventMessage.value.trim();
-            const user = els.eventUser.value.trim();
-            if (!message) {
-                setError('Please enter a message.');
-                return;
-            }
-            if (!user) {
-                setError('Please enter a user.');
-                return;
-            }
-            if (!state.roomCode || !state.hostToken) {
-                setError('Host session missing. Create a room again.');
-                return;
-            }
-            socket.emit('admin:event', {
-                roomCode: state.roomCode,
-                hostToken: state.hostToken,
-                message,
-                user,
-            });
+    if (els.eventSelect) {
+        els.eventSelect.addEventListener('change', () => {
+            els.customEventField.classList.toggle('hidden', els.eventSelect.value !== 'custom');
         });
     }
 
-    if (els.btnSendEventAll) {
-        els.btnSendEventAll.addEventListener('click', () => {
+    if (els.btnSendEvent) {
+        els.btnSendEvent.addEventListener('click', () => {
             setError('');
-            const message = els.eventMessage.value.trim();
+            let message;
+            if (els.eventSelect.value === 'custom') {
+                message = els.eventCustomMessage.value.trim();
+            } else {
+                message = els.eventSelect.value;
+            }
+
             if (!message) {
-                setError('Please enter a message.');
+                setError('Please select or enter a message.');
                 return;
             }
+
+            const selectedPlayers = Array.from(els.eventPlayerList.querySelectorAll('input[type=checkbox]:checked'))
+                .map(cb => cb.value);
+
             if (!state.roomCode || !state.hostToken) {
                 setError('Host session missing. Create a room again.');
                 return;
             }
+
             socket.emit('admin:event', {
                 roomCode: state.roomCode,
                 hostToken: state.hostToken,
                 message,
+                users: selectedPlayers,
             });
         });
     }
@@ -337,11 +330,30 @@
 
     socket.on('lobby:players', (names) => {
         els.playerList.innerHTML = '';
+        els.eventPlayerList.innerHTML = '';
+
+        const allPlayersCheckbox = document.createElement('div');
+        allPlayersCheckbox.className = 'checkbox-item';
+        allPlayersCheckbox.innerHTML = `<input type="checkbox" id="all-players" value="all"><label for="all-players">All Players</label>`;
+        els.eventPlayerList.appendChild(allPlayersCheckbox);
+
+        allPlayersCheckbox.querySelector('#all-players').addEventListener('change', (e) => {
+            els.eventPlayerList.querySelectorAll('input[type=checkbox]').forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+        });
+
         (names || []).forEach((n) => {
             const li = document.createElement('li');
             li.textContent = n;
             els.playerList.appendChild(li);
+
+            const playerCheckbox = document.createElement('div');
+            playerCheckbox.className = 'checkbox-item';
+            playerCheckbox.innerHTML = `<input type="checkbox" id="player-${n}" value="${n}"><label for="player-${n}">${n}</label>`;
+            els.eventPlayerList.appendChild(playerCheckbox);
         });
+
         const isHost = state.mode === 'host';
         const enough = names && names.length >= 2;
         els.btnStartGame.classList.toggle('hidden', !(isHost && enough));
@@ -360,6 +372,18 @@
             els.adminInvestigation.textContent = '—';
             els.adminChatLog.innerHTML = '';
             els.adminDocList.innerHTML = '';
+
+            const scenario = state.catalog.find(c => c.id === state.selectedScenarioId);
+            if (scenario && scenario.events) {
+                els.eventSelect.innerHTML = '<option value="">-- Select an event --</option><option value="custom">-- Custom Message --</option>';
+                scenario.events.forEach(event => {
+                    const option = document.createElement('option');
+                    option.value = event;
+                    option.textContent = event;
+                    els.eventSelect.appendChild(option);
+                });
+            }
+
             requestDocumentList();
         }
     });
