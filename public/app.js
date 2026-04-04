@@ -253,7 +253,7 @@
 
     socket.on('catalog:data', (list) => {
         state.catalog = (Array.isArray(list) ? list : []).map(item => {
-            if (typeof item.events_json === 'string') {
+            if (typeof item.events_json === 'string' && item.events_json) {
                 try {
                     item.events = JSON.parse(item.events_json);
                 } catch (e) {
@@ -261,7 +261,7 @@
                     item.events = [];
                 }
             } else {
-                item.events = item.events_json || [];
+                item.events = item.events || [];
             }
             return item;
         });
