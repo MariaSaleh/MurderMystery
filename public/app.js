@@ -105,10 +105,14 @@
             p.textContent = body;
             t.appendChild(p);
         }
-        els.toastStack.appendChild(t);
-        setTimeout(() => {
+        const closeButton = document.createElement('button');
+        closeButton.className = 'toast-close';
+        closeButton.innerHTML = '&times;';
+        closeButton.addEventListener('click', () => {
             t.remove();
-        }, 9000);
+        });
+        t.appendChild(closeButton);
+        els.toastStack.appendChild(t);
     }
 
     function appendChatLine(container, from, text) {
