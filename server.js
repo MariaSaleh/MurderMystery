@@ -31,7 +31,7 @@ app.use(
         contentSecurityPolicy: {
             directives: {
                 defaultSrc: ["'self'"],
-                scriptSrc: ["'self'"],
+                scriptSrc: ["'self'", "'unsafe-inline'"],
                 styleSrc: ["'self'", 'https://fonts.googleapis.com'],
                 fontSrc: ["'self'", 'https://fonts.gstatic.com'],
                 imgSrc: ["'self'", 'data:'],
@@ -39,6 +39,8 @@ app.use(
                 baseUri: ["'self'"],
                 formAction: ["'self'"],
                 frameAncestors: ["'none'"],
+                manifestSrc: ["'self'"],
+                workerSrc: ["'self'"],
             },
         },
         crossOriginEmbedderPolicy: false,
@@ -112,6 +114,14 @@ app.post('/api/sessions/:sessionId/upload', uploadLimiter, upload.single('file')
 });
 
 app.use(express.static(path.join(__dirname, 'public'), { index: 'index.html', extensions: ['html'] }));
+
+app.get('/sw.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
+
+app.get('/manifest.json', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'manifest.json'));
+});
 
 app.get('/health', (_req, res) => {
     res.json({ ok: true });
