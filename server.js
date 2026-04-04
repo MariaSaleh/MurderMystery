@@ -321,7 +321,7 @@ io.on('connection', (socket) => {
                 io.to(roomCode).emit('scenario:mounted', {
                     title: fullScenario.title,
                     description: fullScenario.description,
-                    theme: full.theme || null,
+                    theme: fullScenario.theme || null,
                 });
 
                 broadcastLobby(roomCode, room);
@@ -432,7 +432,7 @@ db.initDatabase((err) => {
             console.error('[sync]', e2);
             process.exit(1);
         }
-        server.listen(PORT, () => {
+        server.listen(PORT, '0.0.0.0', () => {
             const { networkInterfaces } = require('os');
             const nets = networkInterfaces();
             const addresses = [];
