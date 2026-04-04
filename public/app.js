@@ -226,7 +226,10 @@
             if (els.eventSelect.value === 'custom') {
                 message = els.eventCustomMessage.value.trim();
             } else {
-                message = els.eventSelect.value;
+                const selectedOption = els.eventSelect.options[els.eventSelect.selectedIndex];
+                if (selectedOption) {
+                    message = selectedOption.dataset.text || '';
+                }
             }
 
             if (!message) {
@@ -334,14 +337,10 @@
 
         const allPlayersCheckbox = document.createElement('div');
         allPlayersCheckbox.className = 'checkbox-item';
-        allPlayersCheckbox.innerHTML = `<input type="checkbox" id="all-players" value="all"><label for="all-players">All Players</label>`;
+        allPlayersCheckbox.innerHTML = `<input type="checkbox" id="all-players" value="all" checked><label for="all-players">All Players</label>`;
         els.eventPlayerList.appendChild(allPlayersCheckbox);
 
-        allPlayersCheckbox.querySelector('#all-players').addEventListener('change', (e) => {
-            els.eventPlayerList.querySelectorAll('input[type=checkbox]').forEach(cb => {
-                cb.checked = e.target.checked;
-            });
-        });
+        const playerCheckboxes = [];
 
         (names || []).forEach((n) => {
             const li = document.createElement('li');
@@ -350,8 +349,16 @@
 
             const playerCheckbox = document.createElement('div');
             playerCheckbox.className = 'checkbox-item';
-            playerCheckbox.innerHTML = `<input type="checkbox" id="player-${n}" value="${n}"><label for="player-${n}">${n}</label>`;
+            const cbId = `player-${n.replace(/\s+/g, '-')}`;
+            playerCheckbox.innerHTML = `<input type="checkbox" id="${cbId}" value="${n}" checked><label for="${cbId}">${n}</label>`;
             els.eventPlayerList.appendChild(playerCheckbox);
+            playerCheckboxes.push(playerCheckbox.querySelector('input'));
+        });
+
+        allPlayersCheckbox.querySelector('#all-players').addEventListener('change', (e) => {
+            playerCheckboxes.forEach(cb => {
+                cb.checked = e.target.checked;
+            });
         });
 
         const isHost = state.mode === 'host';
@@ -375,11 +382,12 @@
 
             const scenario = state.catalog.find(c => c.id === state.selectedScenarioId);
             if (scenario && scenario.events) {
-                els.eventSelect.innerHTML = '<option value="">-- Select an event --</option><option value="custom">-- Custom Message --</option>';
-                scenario.events.forEach(event => {
+                els.eventSelect.innerHTML = '<option value="">-- Custom Message --</option>';
+                scenario.events.forEach((event, i) => {
                     const option = document.createElement('option');
-                    option.value = event;
-                    option.textContent = event;
+                    option.value = `event-${i}`;
+                    option.textContent = event.title;
+                    option.dataset.text = event.text;
                     els.eventSelect.appendChild(option);
                 });
             }
