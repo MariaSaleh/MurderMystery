@@ -20,15 +20,16 @@ function migrateIfNeeded(callback) {
                 return callback(e);
             }
             if (!row) {
-                return callback(null); // No table, no migration needed
+                // Scenarios table doesn't exist, so no migration needed, it will be created.
+                return callback(null); 
             }
+
             const sql = row.sql;
-            const isOldIntegerId = /id\s+INTEGER\s+PRIMARY\s+KEY/i.test(sql);
             const hasEventsJson = /events_json/i.test(sql);
 
-            if (isOldIntegerId || !hasEventsJson) {
-                console.log('[database] Schema is outdated, recreating tables.');
-                db.exec('DROP TABLE IF EXISTS characters; DROP TABLE IF EXISTS scenarios;', callback);
+            if (!hasEventsJson) {
+                console.log('[database] Schema is outdated, adding events_json column.');
+                db.exec('ALTER TABLE scenarios ADD COLUMN events_json TEXT', callback);
             } else {
                 callback(null);
             }
@@ -62,11 +63,11 @@ function createTables(callback) {
 }
 
 function initDatabase(callback) {
-    migrateIfNeeded((err) => {
+    createTables((err) => {
         if (err) {
             return callback(err);
         }
-        createTables(callback);
+        migrateIfNeeded(callback);
     });
 }
 

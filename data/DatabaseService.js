@@ -1,73 +1,97 @@
 const db = require('./database');
 
 class DatabaseService {
-    static getCatalog() {
-        return new Promise((resolve, reject) => {
-            db.all(
-                'SELECT id, title, description, theme_json, events_json FROM scenarios ORDER BY title COLLATE NOCASE',
-                [],
-                (err, rows) => {
-                    if (err) {
-                        return reject(err);
-                    }
-                    resolve(
-                        (rows || []).map((r) => ({
-                            id: r.id,
-                            title: r.title,
-                            description: r.description,
-                            theme: r.theme_json ? safeJsonParse(r.theme_json) : null,
-                            events: r.events_json ? safeJsonParse(r.events_json) : [],
-                        }))
-                    );
-                }
-            );
+    getScenarios(callback) {
+        db.all('SELECT * FROM scenarios', [], (err, rows) => {
+            if (err) {
+                console.error('[sync] Error fetching scenarios:', err);
+                return callback(err);
+            }
+            callback(null, rows);
         });
     }
 
-    static getScenarioById(id) {
-        if (typeof id !== 'string' || id.length > 64) {
-            return Promise.resolve(null);
-        }
-        return new Promise((resolve, reject) => {
-            db.get('SELECT id, title, description, theme_json, events_json FROM scenarios WHERE id = ?', [id], (err, scenarioRow) => {
+    getScenarioById(id, callback) {
+        db.get('SELECT * FROM scenarios WHERE id = ?', [id], (err, row) => {
+            if (err) {
+                return callback(err);
+            }
+            if (!row) {
+                return callback(new Error('Scenario not found'));
+            }
+            callback(null, row);
+        });
+    }
+
+    getCharactersByScenarioId(scenarioId, callback) {
+        db.all(
+            'SELECT * FROM characters WHERE scenario_id = ? ORDER BY sort_order ASC',
+            [scenarioId],
+            (err, rows) => {
                 if (err) {
-                    return reject(err);
+                    return callback(err);
                 }
-                if (!scenarioRow) {
-                    return resolve(null);
+                callback(null, rows);
+            }
+        );
+    }
+
+    syncScenario(scenarioData, callback) {
+        const { id, title, description, theme_json, events_json, characters } = scenarioData;
+
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION;');
+
+            const scenarioQuery = `
+                INSERT INTO scenarios (id, title, description, theme_json, events_json)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    description = excluded.description,
+                    theme_json = excluded.theme_json,
+                    events_json = excluded.events_json;
+            `;
+
+            db.run(scenarioQuery, [id, title, description, theme_json, events_json], (err) => {
+                if (err) {
+                    console.error('[sync] Error syncing scenario:', err);
+                    db.run('ROLLBACK;');
+                    return callback(err);
                 }
-                db.all(
-                    'SELECT name, bio, secret FROM characters WHERE scenario_id = ? ORDER BY sort_order ASC, id ASC',
-                    [id],
-                    (err2, castRows) => {
-                        if (err2) {
-                            return reject(err2);
-                        }
-                        resolve({
-                            id: scenarioRow.id,
-                            title: scenarioRow.title,
-                            description: scenarioRow.description,
-                            theme: scenarioRow.theme_json ? safeJsonParse(scenarioRow.theme_json) : null,
-                            events: scenarioRow.events_json ? safeJsonParse(scenarioRow.events_json) : [],
-                            cast: (castRows || []).map((c) => ({
-                                name: c.name,
-                                bio: c.bio,
-                                secret: c.secret,
-                            })),
-                        });
+
+                db.run('DELETE FROM characters WHERE scenario_id = ?', [id], (err) => {
+                    if (err) {
+                        console.error('[sync] Error deleting old characters:', err);
+                        db.run('ROLLBACK;');
+                        return callback(err);
                     }
-                );
+
+                    const charInsert = db.prepare(
+                        'INSERT INTO characters (scenario_id, name, bio, secret) VALUES (?, ?, ?, ?)'
+                    );
+                    (characters || []).forEach((char) => {
+                        charInsert.run(id, char.name, char.bio, char.secret);
+                    });
+
+                    charInsert.finalize((err) => {
+                        if (err) {
+                            console.error('[sync] Error inserting characters:', err);
+                            db.run('ROLLBACK;');
+                            return callback(err);
+                        }
+
+                        db.run('COMMIT;', (err) => {
+                            if (err) {
+                                console.error('[sync] Error committing transaction:', err);
+                                return callback(err);
+                            }
+                            callback(null);
+                        });
+                    });
+                });
             });
         });
     }
 }
 
-function safeJsonParse(text) {
-    try {
-        return JSON.parse(text);
-    } catch {
-        return null;
-    }
-}
-
-module.exports = DatabaseService;
+module.exports = new DatabaseService();
