@@ -291,35 +291,46 @@ io.on('connection', (socket) => {
     socket.on('session:rejoinHost', (payload) => {
         const { roomCode, hostToken } = payload;
         const room = rooms.get(roomCode);
-    
-        if (room && room.hostToken && timingSafeEqualToken(hostToken, room.hostToken)) {
-            room.hostSocketId = socket.id;
-            socket.join(roomCode);
-            joinedRoom = roomCode;
-    
-            socket.emit('room:createResult', { ok: true });
-            socket.emit('room:created', {
-                roomCode,
-                sessionId: room.sessionId,
-                role: 'admin',
-                hostToken: room.hostToken.toString('hex'),
-            });
-            
-            if (room.scenarioMeta) {
-                socket.emit('scenario:mountResult', { ok: true });
-                socket.emit('scenario:mounted', { title: room.scenarioMeta.title });
-            }
-            
-            if (room.game && room.game.state === 'ACTIVE') {
-                socket.emit('game:started', {
-                    scenarioTitle: room.game.scenario.title,
+
+        if (!room || !room.hostToken || typeof hostToken !== 'string') {
+            socket.emit('session:ended', { message: 'Invalid session or token.' });
+            return;
+        }
+
+        try {
+            const clientTokenBuf = Buffer.from(hostToken, 'hex');
+            const serverTokenBuf = room.hostToken;
+
+            if (clientTokenBuf.length === serverTokenBuf.length && crypto.timingSafeEqual(clientTokenBuf, serverTokenBuf)) {
+                room.hostSocketId = socket.id;
+                socket.join(roomCode);
+                joinedRoom = roomCode;
+
+                socket.emit('room:created', {
+                    roomCode,
                     sessionId: room.sessionId,
+                    role: 'admin',
+                    hostToken: room.hostToken.toString('hex'),
                 });
+
+                if (room.scenarioMeta) {
+                    socket.emit('scenario:mountResult', { ok: true });
+                    socket.emit('scenario:mounted', { title: room.scenarioMeta.title });
+                }
+
+                if (room.game && room.game.state === 'ACTIVE') {
+                    socket.emit('game:started', {
+                        scenarioTitle: room.game.scenario.title,
+                        sessionId: room.sessionId,
+                    });
+                }
+
+                broadcastLobby(roomCode, room);
+            } else {
+                socket.emit('session:ended', { message: 'Session token mismatch.' });
             }
-            
-            broadcastLobby(roomCode, room);
-        } else {
-            socket.emit('session:ended', { message: 'Your previous session expired.' });
+        } catch (e) {
+            socket.emit('session:ended', { message: 'Invalid session token format.' });
         }
     });
 
@@ -453,40 +464,35 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        if (!joinedRoom) return;
-        const room = rooms.get(joinedRoom);
-        if (!room) return;
-
+        const roomCode = joinedRoom;
         const oldSocketId = socket.id;
-        const timeout = 30000; // 30 seconds
+
+        if (!roomCode) {
+            return;
+        }
 
         setTimeout(() => {
-            const currentRoom = rooms.get(joinedRoom);
-            if (!currentRoom) return;
-
-            // If the host disconnected and did not reconnect, end the session
-            if (currentRoom.hostSocketId === oldSocketId) {
-                io.to(joinedRoom).emit('session:ended', {
-                    reason: 'host_left',
-                    message: 'The host left; this session has ended.',
-                });
-                rooms.delete(joinedRoom);
+            const room = rooms.get(roomCode);
+            if (!room) {
                 return;
             }
 
-            // If a player disconnected and did not reconnect, remove them
-            let playerRemoved = false;
-            const playersSource = currentRoom.game ? currentRoom.game.players : currentRoom.prePlayers;
-            if (playersSource.has(oldSocketId)) {
-                playersSource.delete(oldSocketId);
-                playerRemoved = true;
+            if (room.hostSocketId === oldSocketId) {
+                io.to(roomCode).emit('session:ended', {
+                    reason: 'host_left',
+                    message: 'The host left; this session has ended.',
+                });
+                rooms.delete(roomCode);
+                return;
             }
 
-            if (playerRemoved) {
-                broadcastLobby(joinedRoom, currentRoom);
+            const players = room.game ? room.game.players : room.prePlayers;
+            if (players && players.has(oldSocketId)) {
+                players.delete(oldSocketId);
+                broadcastLobby(roomCode, room);
             }
-        }, timeout);
-    });
+        }, 30000); // 30-second grace period
+                            });
 });
 
 db.initDatabase((err) => {
