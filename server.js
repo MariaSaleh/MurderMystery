@@ -153,7 +153,9 @@ function getRoomOrEmitError(socket, roomCode, eventName) {
 }
 
 function broadcastLobby(roomCode, room) {
-    const names = room.game ? room.game.getPlayerNames() : Array.from(room.prePlayers.values());
+    const names = room.game
+        ? room.game.getPlayerNames()
+        : Array.from(room.prePlayers.values()).map(p => p.name);
     io.to(roomCode).emit('lobby:players', names);
 }
 
@@ -223,7 +225,7 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         joinedRoom = roomCode;
 
-        const playerId = crypto.randomUUID(); // Unique, persistent ID for the player
+        const playerId = crypto.randomUUID();
 
         if (room.game) {
             const player = room.game.addPlayer(socket.id, name);
@@ -239,7 +241,7 @@ io.on('connection', (socket) => {
             sessionId: room.sessionId,
             role: 'player',
             scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
-            playerId, // Send the persistent ID to the client
+            playerId,
         });
     });
 
@@ -247,22 +249,51 @@ io.on('connection', (socket) => {
         const { roomCode, playerId } = payload;
         const room = rooms.get(roomCode);
 
-        if (room && room.game) {
+        if (!room) return;
+
+        let playerEntry = null;
+        let oldSocketId = null;
+
+        if (room.game) {
             const existingPlayer = room.game.findPlayerByPlayerId(playerId);
             if (existingPlayer) {
+                for (const [id, p] of room.game.players.entries()) {
+                    if (p.playerId === playerId) {
+                        oldSocketId = id;
+                        break;
+                    }
+                }
+                if (oldSocketId) room.game.players.delete(oldSocketId);
                 room.game.reconnectPlayer(socket.id, existingPlayer);
-                socket.join(roomCode);
-                joinedRoom = roomCode;
-                broadcastLobby(roomCode, room);
-                socket.emit('room:joinResult', {
-                    ok: true,
-                    roomCode,
-                    sessionId: room.sessionId,
-                    role: 'player',
-                    scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
-                    playerId,
-                });
+                playerEntry = existingPlayer;
             }
+        } else {
+            for (const [sid, p] of room.prePlayers.entries()) {
+                if (p.playerId === playerId) {
+                    playerEntry = p;
+                    oldSocketId = sid;
+                    break;
+                }
+            }
+            if (playerEntry) {
+                if (oldSocketId) room.prePlayers.delete(oldSocketId);
+                playerEntry.id = socket.id;
+                room.prePlayers.set(socket.id, playerEntry);
+            }
+        }
+
+        if (playerEntry) {
+            socket.join(roomCode);
+            joinedRoom = roomCode;
+            broadcastLobby(roomCode, room);
+            socket.emit('room:joinResult', {
+                ok: true,
+                roomCode,
+                sessionId: room.sessionId,
+                role: 'player',
+                scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
+                playerId,
+            });
         }
     });
 
@@ -300,31 +331,22 @@ io.on('connection', (socket) => {
                     return;
                 }
 
-                const fullScenario = {
-                    ...scenarioData,
-                    cast: characters
-                };
+                const fullScenario = { ...scenarioData, cast: characters };
 
                 if (room.game && room.game.state !== 'LOBBY') {
                     socket.emit('scenario:mountResult', { ok: false, error: 'The investigation has already begun.' });
                     return;
                 }
                 
-                let gm;
-                if (room.game) {
-                    const preserved = Array.from(room.game.players.entries())
-                        .filter(([id]) => id !== room.hostSocketId)
-                        .map(([id, pl]) => [id, pl.name]);
-                    gm = new GameManager(io, fullScenario, roomCode);
-                    preserved.forEach(([id, name]) => gm.addPlayer(id, name));
-                } else {
-                    gm = new GameManager(io, fullScenario, roomCode);
-                    for (const [sid, p] of room.prePlayers) {
-                        if (sid !== room.hostSocketId) {
-                           const player = gm.addPlayer(sid, p.name);
-                           player.playerId = p.playerId;
-                        }
-                    }
+                const gm = new GameManager(io, fullScenario, roomCode);
+                const playersToTransfer = room.game ? Array.from(room.game.players.values()) : Array.from(room.prePlayers.values());
+
+                for (const p of playersToTransfer) {
+                    const newPlayer = gm.addPlayer(p.id, p.name);
+                    newPlayer.playerId = p.playerId;
+                }
+
+                if (!room.game) {
                     room.prePlayers.clear();
                 }
 
@@ -410,35 +432,34 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        if (!joinedRoom) {
-            return;
-        }
+        if (!joinedRoom) return;
         const room = rooms.get(joinedRoom);
-        if (!room) {
-            return;
-        }
-        if (socket.id === room.hostSocketId) {
+        if (!room) return;
+    
+        const oldSocketId = socket.id;
+        const isHost = oldSocketId === room.hostSocketId;
+        
+        // Set a timeout only for hosts or for players once the game has started.
+        // Players in the lobby should not be removed on disconnect.
+        const shouldTimeout = isHost || room.game;
+        const timeout = room.game ? room.game.disconnect_timeout : 5000;
+
+        if (shouldTimeout) {
             setTimeout(() => {
-                if (room.hostSocketId === socket.id) {
+                const currentRoom = rooms.get(joinedRoom);
+                if (!currentRoom) return;
+
+                if (isHost && currentRoom.hostSocketId === oldSocketId) {
                     io.to(joinedRoom).emit('session:ended', {
                         reason: 'host_left',
                         message: 'The host left; this session has ended.',
                     });
                     rooms.delete(joinedRoom);
+                } else if (!isHost && currentRoom.game && currentRoom.game.players.has(oldSocketId)) {
+                    currentRoom.game.removePlayer(oldSocketId);
+                    broadcastLobby(joinedRoom, currentRoom);
                 }
-            }, room.game ? room.game.disconnect_timeout : 5000);
-            return;
-        }
-        if (room.game) {
-            setTimeout(() => {
-                if (room.game.players.has(socket.id)) {
-                    room.game.removePlayer(socket.id);
-                    broadcastLobby(joinedRoom, room);
-                }
-            }, room.game.disconnect_timeout);
-        } else {
-            room.prePlayers.delete(socket.id);
-            broadcastLobby(joinedRoom, room);
+            }, timeout);
         }
     });
 });
