@@ -418,16 +418,24 @@ io.on('connection', (socket) => {
             return;
         }
         if (socket.id === room.hostSocketId) {
-            io.to(joinedRoom).emit('session:ended', {
-                reason: 'host_left',
-                message: 'The host left; this session has ended.',
-            });
-            rooms.delete(joinedRoom);
+            setTimeout(() => {
+                if (room.hostSocketId === socket.id) {
+                    io.to(joinedRoom).emit('session:ended', {
+                        reason: 'host_left',
+                        message: 'The host left; this session has ended.',
+                    });
+                    rooms.delete(joinedRoom);
+                }
+            }, room.game ? room.game.disconnect_timeout : 5000);
             return;
         }
         if (room.game) {
-            room.game.removePlayer(socket.id);
-            broadcastLobby(joinedRoom, room);
+            setTimeout(() => {
+                if (room.game.players.has(socket.id)) {
+                    room.game.removePlayer(socket.id);
+                    broadcastLobby(joinedRoom, room);
+                }
+            }, room.game.disconnect_timeout);
         } else {
             room.prePlayers.delete(socket.id);
             broadcastLobby(joinedRoom, room);

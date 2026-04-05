@@ -8,6 +8,7 @@ class GameManager {
         this.players = new Map(); // [socket.id, Player]
         this.state = 'LOBBY'; // LOBBY, ACTIVE, ENDED
         this.killer = null;
+        this.disconnect_timeout = 30 * 1000; // 30 seconds
     }
 
     addPlayer(socketId, name) {

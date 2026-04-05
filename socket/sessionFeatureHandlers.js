@@ -53,7 +53,7 @@ function attachSessionFeatureHandlers(socket, io, rooms) {
             return room.hostDisplayName;
         }
         if (room.prePlayers.has(sock.id)) {
-            return room.prePlayers.get(sock.id);
+            return room.prePlayers.get(sock.id).name;
         }
         if (room.game && room.game.players.has(sock.id)) {
             return room.game.players.get(sock.id).name;
