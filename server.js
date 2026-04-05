@@ -254,38 +254,29 @@ io.on('connection', (socket) => {
         let playerEntry = null;
         let oldSocketId = null;
 
-        if (room.game) {
-            const existingPlayer = room.game.findPlayerByPlayerId(playerId);
-            if (existingPlayer) {
-                for (const [id, p] of room.game.players.entries()) {
-                    if (p.playerId === playerId) {
-                        oldSocketId = id;
-                        break;
-                    }
-                }
-                if (oldSocketId) room.game.players.delete(oldSocketId);
-                room.game.reconnectPlayer(socket.id, existingPlayer);
-                playerEntry = existingPlayer;
-            }
-        } else {
-            for (const [sid, p] of room.prePlayers.entries()) {
-                if (p.playerId === playerId) {
-                    playerEntry = p;
-                    oldSocketId = sid;
-                    break;
-                }
-            }
-            if (playerEntry) {
-                if (oldSocketId) room.prePlayers.delete(oldSocketId);
-                playerEntry.id = socket.id;
-                room.prePlayers.set(socket.id, playerEntry);
+        const playersSource = room.game ? room.game.players : room.prePlayers;
+
+        for (const [sid, p] of playersSource.entries()) {
+            if (p.playerId === playerId) {
+                playerEntry = p;
+                oldSocketId = sid;
+                break;
             }
         }
 
         if (playerEntry) {
+            if (oldSocketId) playersSource.delete(oldSocketId);
+            playerEntry.id = socket.id;
+            playersSource.set(socket.id, playerEntry);
+
             socket.join(roomCode);
             joinedRoom = roomCode;
             broadcastLobby(roomCode, room);
+
+            if (room.game) {
+                room.game.reconnectPlayer(socket.id, playerEntry);
+            }
+
             socket.emit('room:joinResult', {
                 ok: true,
                 roomCode,
@@ -294,6 +285,41 @@ io.on('connection', (socket) => {
                 scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
                 playerId,
             });
+        }
+    });
+
+    socket.on('session:rejoinHost', (payload) => {
+        const { roomCode, hostToken } = payload;
+        const room = rooms.get(roomCode);
+    
+        if (room && room.hostToken && timingSafeEqualToken(hostToken, room.hostToken)) {
+            room.hostSocketId = socket.id;
+            socket.join(roomCode);
+            joinedRoom = roomCode;
+    
+            socket.emit('room:createResult', { ok: true });
+            socket.emit('room:created', {
+                roomCode,
+                sessionId: room.sessionId,
+                role: 'admin',
+                hostToken: room.hostToken.toString('hex'),
+            });
+            
+            if (room.scenarioMeta) {
+                socket.emit('scenario:mountResult', { ok: true });
+                socket.emit('scenario:mounted', { title: room.scenarioMeta.title });
+            }
+            
+            if (room.game && room.game.state === 'ACTIVE') {
+                socket.emit('game:started', {
+                    scenarioTitle: room.game.scenario.title,
+                    sessionId: room.sessionId,
+                });
+            }
+            
+            broadcastLobby(roomCode, room);
+        } else {
+            socket.emit('session:ended', { message: 'Your previous session expired.' });
         }
     });
 
@@ -337,22 +363,17 @@ io.on('connection', (socket) => {
                     socket.emit('scenario:mountResult', { ok: false, error: 'The investigation has already begun.' });
                     return;
                 }
-                
-                const gm = new GameManager(io, fullScenario, roomCode);
-                const playersToTransfer = room.game ? Array.from(room.game.players.values()) : Array.from(room.prePlayers.values());
 
-                for (const p of playersToTransfer) {
+                const gm = new GameManager(io, fullScenario, roomCode);
+                for (const p of room.prePlayers.values()) {
                     const newPlayer = gm.addPlayer(p.id, p.name);
                     newPlayer.playerId = p.playerId;
                 }
-
-                if (!room.game) {
-                    room.prePlayers.clear();
-                }
+                room.prePlayers.clear();
 
                 room.game = gm;
                 room.scenarioMeta = { id: fullScenario.id, title: fullScenario.title };
-                
+
                 io.to(roomCode).emit('scenario:mounted', {
                     title: fullScenario.title,
                     description: fullScenario.description,
@@ -428,39 +449,43 @@ io.on('connection', (socket) => {
                     }
                 }
             }
-        } 
+        }
     });
 
     socket.on('disconnect', () => {
         if (!joinedRoom) return;
         const room = rooms.get(joinedRoom);
         if (!room) return;
-    
+
         const oldSocketId = socket.id;
-        const isHost = oldSocketId === room.hostSocketId;
-        
-        // Set a timeout only for hosts or for players once the game has started.
-        // Players in the lobby should not be removed on disconnect.
-        const shouldTimeout = isHost || room.game;
-        const timeout = room.game ? room.game.disconnect_timeout : 5000;
+        const timeout = 30000; // 30 seconds
 
-        if (shouldTimeout) {
-            setTimeout(() => {
-                const currentRoom = rooms.get(joinedRoom);
-                if (!currentRoom) return;
+        setTimeout(() => {
+            const currentRoom = rooms.get(joinedRoom);
+            if (!currentRoom) return;
 
-                if (isHost && currentRoom.hostSocketId === oldSocketId) {
-                    io.to(joinedRoom).emit('session:ended', {
-                        reason: 'host_left',
-                        message: 'The host left; this session has ended.',
-                    });
-                    rooms.delete(joinedRoom);
-                } else if (!isHost && currentRoom.game && currentRoom.game.players.has(oldSocketId)) {
-                    currentRoom.game.removePlayer(oldSocketId);
-                    broadcastLobby(joinedRoom, currentRoom);
-                }
-            }, timeout);
-        }
+            // If the host disconnected and did not reconnect, end the session
+            if (currentRoom.hostSocketId === oldSocketId) {
+                io.to(joinedRoom).emit('session:ended', {
+                    reason: 'host_left',
+                    message: 'The host left; this session has ended.',
+                });
+                rooms.delete(joinedRoom);
+                return;
+            }
+
+            // If a player disconnected and did not reconnect, remove them
+            let playerRemoved = false;
+            const playersSource = currentRoom.game ? currentRoom.game.players : currentRoom.prePlayers;
+            if (playersSource.has(oldSocketId)) {
+                playersSource.delete(oldSocketId);
+                playerRemoved = true;
+            }
+
+            if (playerRemoved) {
+                broadcastLobby(joinedRoom, currentRoom);
+            }
+        }, timeout);
     });
 });
 

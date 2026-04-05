@@ -160,15 +160,22 @@
     }
 
     function tryRestoreSession() {
-        const roomCode = Object.keys(localStorage).find(k => k.startsWith('mm_session_'));
-        if (roomCode) {
-            const session = loadSession(roomCode.substring('mm_session_'.length));
-            if (session && session.playerId) {
-                state.mode = 'join';
-                state.roomCode = roomCode.substring('mm_session_'.length);
-                state.playerId = session.playerId;
-                socket.emit('session:rejoin', { roomCode: state.roomCode, playerId: state.playerId });
-            }
+        const roomCodeKey = Object.keys(localStorage).find(k => k.startsWith('mm_session_'));
+        if (!roomCodeKey) return;
+
+        const roomCode = roomCodeKey.substring('mm_session_'.length);
+        const session = loadSession(roomCode);
+
+        if (session && session.playerId) {
+            state.mode = 'join';
+            state.roomCode = roomCode;
+            state.playerId = session.playerId;
+            socket.emit('session:rejoin', { roomCode: state.roomCode, playerId: state.playerId });
+        } else if (session && session.hostToken) {
+            state.mode = 'host';
+            state.roomCode = roomCode;
+            state.hostToken = session.hostToken;
+            socket.emit('session:rejoinHost', { roomCode: state.roomCode, hostToken: state.hostToken });
         }
     }
 
