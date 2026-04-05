@@ -1,0 +1,17 @@
+{
+    "id": "orient-express",
+    "title": "Death on the Orient Express",
+    "description": "A blizzard-stalled train. A locked-room mystery.",
+    "theme": { "primary": "#C5A059", "secondary": "#0A0F14" },
+    "cast": [
+        { "name": "The Countess", "bio": "Elegant and cold.", "secret": "You are a thief." },
+        { "name": "The Colonel", "bio": "A man of war.", "secret": "You are seeking revenge." },
+        { "name": "The Conductor", "bio": "He sees everything.", "secret": "You took a bribe." }
+    ],
+    "events": [
+        { "title": "Sudden Stop", "text": "The train lurches violently, then stops with a shudder." },
+        { "title": "Echoing Scream", "text": "A blood-curdling scream echoes from the dining car." },
+        { "title": "Conductor's Announcement", "text": "The conductor announces a delay due to a snowdrift on the tracks." },
+        { "title": "Shadowy Figure", "text": "A shadowy figure is seen moving along the outside of the train." }
+    ]
+}
