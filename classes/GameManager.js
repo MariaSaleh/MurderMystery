@@ -1,65 +1,88 @@
-const crypto = require('crypto');
 const Player = require('./Player');
 
 class GameManager {
-    constructor(io, scenario, roomId) {
+    constructor(io, scenario, roomCode) {
         this.io = io;
         this.scenario = scenario;
-        this.roomId = roomId;
-        this.players = new Map();
-        this.state = 'LOBBY';
+        this.roomCode = roomCode;
+        this.players = new Map(); // [socket.id, Player]
+        this.state = 'LOBBY'; // LOBBY, ACTIVE, ENDED
+        this.killer = null;
     }
 
     addPlayer(socketId, name) {
-        this.players.set(socketId, new Player(socketId, name));
-        console.log(`[${this.scenario.title}] ${name} joined room ${this.roomId}.`);
+        const player = new Player(socketId, name);
+        this.players.set(socketId, player);
+        return player;
     }
 
     removePlayer(socketId) {
         this.players.delete(socketId);
     }
 
-    getPlayerNames() {
-        return Array.from(this.players.values()).map((p) => p.name);
+    findPlayerByPlayerId(playerId) {
+        for (const player of this.players.values()) {
+            if (player.playerId === playerId) {
+                return player;
+            }
+        }
+        return null;
     }
 
-    broadcastPlayers() {
-        this.io.to(this.roomId).emit('lobby:players', this.getPlayerNames());
+    reconnectPlayer(socketId, existingPlayer) {
+        existingPlayer.id = socketId;
+        this.players.set(socketId, existingPlayer);
+
+        // Send the player their character info again
+        if (existingPlayer.character) {
+            this.io.to(socketId).emit('GAME_START', {
+                scenarioTitle: this.scenario.title,
+                theme: this.scenario.theme,
+                dossier: {
+                    character: existingPlayer.character,
+                    isKiller: existingPlayer.character.name === this.killer,
+                },
+            });
+        }
+    }
+
+    getPlayerNames() {
+        return Array.from(this.players.values()).map(p => p.name);
     }
 
     startGame() {
-        const count = this.players.size;
-        const cast = [...this.scenario.cast];
-        if (count < 2) {
-            return { success: false, error: 'Need at least two guest players in the lobby (the admin does not take a role).' };
+        if (this.state !== 'LOBBY') {
+            return { success: false, error: 'Game already started' };
         }
-        if (cast.length < count) {
-            return {
-                success: false,
-                error: `This case only has ${cast.length} roles; remove players or pick another scenario.`,
+
+        const characters = [...this.scenario.cast];
+        if (characters.length < this.players.size) {
+            return { success: false, error: 'Not enough characters for all players.' };
+        }
+
+        // Assign killer
+        const killerIndex = Math.floor(Math.random() * characters.length);
+        this.killer = characters[killerIndex].name;
+
+        // Assign characters to players
+        for (const [socketId, player] of this.players.entries()) {
+            const charIndex = Math.floor(Math.random() * characters.length);
+            const assignedChar = characters.splice(charIndex, 1)[0];
+            player.assignCharacter(assignedChar);
+
+            const dossier = {
+                character: assignedChar,
+                isKiller: assignedChar.name === this.killer,
             };
-        }
 
-        for (let i = cast.length - 1; i > 0; i -= 1) {
-            const j = crypto.randomInt(0, i + 1);
-            [cast[i], cast[j]] = [cast[j], cast[i]];
-        }
-        const shuffledCast = cast.slice(0, count);
-        const playerArray = Array.from(this.players.values());
-        const killerIndex = crypto.randomInt(0, count);
-
-        playerArray.forEach((player, i) => {
-            const charData = shuffledCast[i];
-            player.assignCharacter(charData, i === killerIndex);
-            this.io.to(player.id).emit('GAME_START', {
-                dossier: player.getDossier(),
+            this.io.to(socketId).emit('GAME_START', {
                 scenarioTitle: this.scenario.title,
-                scenarioDesc: this.scenario.description,
-                theme: this.scenario.theme || null,
+                theme: this.scenario.theme,
+                dossier,
             });
-        });
+        }
 
-        this.state = 'INVESTIGATION';
+        this.state = 'ACTIVE';
         return { success: true };
     }
 }

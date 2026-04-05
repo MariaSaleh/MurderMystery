@@ -1,26 +1,15 @@
 class Player {
-    constructor(id, name) {
-        this.id = id;
+    constructor(socketId, name, playerId) {
+        this.id = socketId; // socket.id, changes on reconnect
         this.name = name;
+        this.playerId = playerId; // persistent uuid, does not change
         this.character = null;
-        this.isKiller = false;
+        this.isReady = false;
     }
 
-    assignCharacter(character, isKiller) {
+    assignCharacter(character) {
         this.character = character;
-        this.isKiller = isKiller;
-    }
-
-    getDossier() {
-        return {
-            playerName: this.name,
-            isKiller: this.isKiller,
-            character: {
-                name: this.character.name,
-                bio: this.character.bio,
-                secret: this.character.secret
-            }
-        };
     }
 }
+
 module.exports = Player;

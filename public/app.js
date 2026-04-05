@@ -80,12 +80,29 @@
     }
 
     function storageKey(room) {
-        return `mm_host_${room}`;
+        return `mm_session_${room}`;
     }
 
-    function saveHostSession(roomCode, hostToken) {
+    function saveSession(roomCode, data) {
         try {
-            sessionStorage.setItem(storageKey(roomCode), JSON.stringify({ hostToken }));
+            localStorage.setItem(storageKey(roomCode), JSON.stringify(data));
+        } catch {
+            /* ignore */
+        }
+    }
+
+    function loadSession(roomCode) {
+        try {
+            const raw = localStorage.getItem(storageKey(roomCode));
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function clearSession(roomCode) {
+        try {
+            localStorage.removeItem(storageKey(roomCode));
         } catch {
             /* ignore */
         }
@@ -140,6 +157,19 @@
         els.lobbyAdminHint.classList.toggle('hidden', !isHost);
         els.playerListLabel.textContent = isHost ? 'Guest players (receive roles)' : 'Other guests';
         els.btnStartGame.classList.toggle('hidden', !(isHost && state.mode === 'host'));
+    }
+
+    function tryRestoreSession() {
+        const roomCode = Object.keys(localStorage).find(k => k.startsWith('mm_session_'));
+        if (roomCode) {
+            const session = loadSession(roomCode.substring('mm_session_'.length));
+            if (session && session.playerId) {
+                state.mode = 'join';
+                state.roomCode = roomCode.substring('mm_session_'.length);
+                state.playerId = session.playerId;
+                socket.emit('session:rejoin', { roomCode: state.roomCode, playerId: state.playerId });
+            }
+        }
     }
 
     document.getElementById('btn-goto-host').addEventListener('click', () => {
@@ -311,7 +341,7 @@
         state.roomCode = data.roomCode;
         state.sessionId = data.sessionId || null;
         state.hostToken = data.hostToken;
-        saveHostSession(data.roomCode, data.hostToken);
+        saveSession(data.roomCode, { hostToken: data.hostToken });
         els.roomCodeDisplay.textContent = data.roomCode;
         stepHost1.classList.add('hidden');
         stepHost2.classList.remove('hidden');
@@ -324,6 +354,8 @@
         }
         state.roomCode = res.roomCode;
         state.sessionId = res.sessionId || null;
+        state.playerId = res.playerId || null;
+        saveSession(res.roomCode, { playerId: res.playerId });
         showLobby(false, res.scenarioTitle);
     });
 
@@ -412,9 +444,13 @@
     socket.on('session:ended', (payload) => {
         const msg = (payload && payload.message) || 'This session has ended.';
         setError(msg);
+        if (state.roomCode) {
+            clearSession(state.roomCode);
+        }
         state.roomCode = null;
         state.sessionId = null;
         state.hostToken = null;
+        state.playerId = null;
         showView('entry');
         views.entry.classList.remove('hidden');
     });
@@ -496,6 +532,7 @@
     });
 
     window.addEventListener('load', () => {
+        tryRestoreSession();
         socket.emit('catalog:request');
     });
 })();

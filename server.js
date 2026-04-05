@@ -222,10 +222,15 @@ io.on('connection', (socket) => {
         }
         socket.join(roomCode);
         joinedRoom = roomCode;
+
+        const playerId = crypto.randomUUID(); // Unique, persistent ID for the player
+
         if (room.game) {
-            room.game.addPlayer(socket.id, name);
+            const player = room.game.addPlayer(socket.id, name);
+            player.playerId = playerId;
         } else {
-            room.prePlayers.set(socket.id, name);
+            const player = { id: socket.id, name, playerId };
+            room.prePlayers.set(socket.id, player);
         }
         broadcastLobby(roomCode, room);
         socket.emit('room:joinResult', {
@@ -234,7 +239,31 @@ io.on('connection', (socket) => {
             sessionId: room.sessionId,
             role: 'player',
             scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
+            playerId, // Send the persistent ID to the client
         });
+    });
+
+    socket.on('session:rejoin', (payload) => {
+        const { roomCode, playerId } = payload;
+        const room = rooms.get(roomCode);
+
+        if (room && room.game) {
+            const existingPlayer = room.game.findPlayerByPlayerId(playerId);
+            if (existingPlayer) {
+                room.game.reconnectPlayer(socket.id, existingPlayer);
+                socket.join(roomCode);
+                joinedRoom = roomCode;
+                broadcastLobby(roomCode, room);
+                socket.emit('room:joinResult', {
+                    ok: true,
+                    roomCode,
+                    sessionId: room.sessionId,
+                    role: 'player',
+                    scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
+                    playerId,
+                });
+            }
+        }
     });
 
     socket.on('scenario:mount', (payload) => {
@@ -290,9 +319,10 @@ io.on('connection', (socket) => {
                     preserved.forEach(([id, name]) => gm.addPlayer(id, name));
                 } else {
                     gm = new GameManager(io, fullScenario, roomCode);
-                    for (const [sid, pname] of room.prePlayers) {
+                    for (const [sid, p] of room.prePlayers) {
                         if (sid !== room.hostSocketId) {
-                            gm.addPlayer(sid, pname);
+                           const player = gm.addPlayer(sid, p.name);
+                           player.playerId = p.playerId;
                         }
                     }
                     room.prePlayers.clear();

@@ -1,158 +1,181 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Real-time murder mystery sessions for your table.">
-    <title>Velvet &amp; Alibi — Murder Mystery</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Murder Mystery</title>
     <link rel="stylesheet" href="/css/styles.css">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/img/favicon-32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/img/favicon-16.png" sizes="16x16">
+    <meta name="theme-color" content="#433452">
 </head>
+
 <body>
-    <div class="app-shell">
-        <header class="brand">
-            <h1 class="brand__mark">Velvet &amp; Alibi</h1>
-            <p class="brand__tag">Murder mystery · live sessions</p>
+    <div class="view-container">
+        <header class="site-header">
+            <div class="logo-text">M</div>
+            <h1>Murder Mystery</h1>
         </header>
 
-        <div id="global-error" class="msg msg--error hidden" role="alert"></div>
-
-        <section id="view-entry" class="panel">
-            <h2 class="panel-title">Welcome</h2>
-            <p class="panel-lead">Host a new case for your group, or join with a six-letter room code.</p>
-            <div class="btn-row">
-                <button type="button" class="btn btn--primary" id="btn-goto-host">Host a room</button>
-                <button type="button" class="btn btn--ghost" id="btn-goto-join">Join a room</button>
+        <div id="view-entry">
+            <div class="card">
+                <p>
+                    Welcome to Murder Mystery, the interactive party game where you and your friends will try to solve a
+                    murder — or get away with it.
+                </p>
+                <p class="text-center">
+                    <button type="button" id="btn-goto-host" class="btn-primary">Host a new game</button>
+                </p>
+                <hr>
+                <p class="text-center">
+                    <button type="button" id="btn-goto-join">Join a game</button>
+                </p>
             </div>
-        </section>
 
-        <section id="view-host-flow" class="hidden">
-            <div id="step-host-1" class="panel">
-                <button type="button" class="btn btn--ghost" id="btn-back-entry" style="margin-bottom: 1rem;">← Back</button>
-                <h2 class="panel-title">Host this evening</h2>
-                <p class="panel-lead">You are the room admin — you run the session and do not receive a character. Guests need their own devices.</p>
-                <div class="field">
-                    <label for="host-name-create">Your name</label>
-                    <input type="text" id="host-name-create" name="hostName" autocomplete="nickname" maxlength="40" placeholder="e.g. Jordan">
+            <div class="card">
+                <h2>How to play</h2>
+                <p>
+                    The host will choose a case file. Then, each player is assigned a character with a backstory and a
+                    secret. One of you is the killer, and their job is to keep their identity hidden.
+                </p>
+                <p>
+                    Everyone else must figure out who the killer is. Good luck!
+                </p>
+            </div>
+        </div>
+
+        <div id="view-host-flow" class="hidden">
+            <div class="card">
+                <button type="button" class="btn-back" id="btn-back-entry">&larr; Back</button>
+                <h2>Host a new game</h2>
+            </div>
+
+            <div id="step-host-1">
+                <div class="card">
+                    <label for="host-name-create">Your name (as host)</label>
+                    <input type="text" id="host-name-create">
+                    <button type="button" id="btn-create-room" class="btn-primary">Create a room</button>
                 </div>
-                <button type="button" class="btn btn--primary" id="btn-create-room">Create room</button>
             </div>
 
-            <div id="step-host-2" class="panel hidden">
-                <h2 class="panel-title">Share the code</h2>
-                <p class="panel-lead">Guests enter this on their devices. Then choose a case file.</p>
-                <div class="room-code-box">
-                    <div id="room-code-display" class="room-code" aria-live="polite"></div>
-                    <button type="button" class="btn btn--primary btn--inline" id="btn-copy-code">Copy</button>
+            <div id="step-host-2" class="hidden">
+                <div class="card">
+                    <h3>Room code</h3>
+                    <div class="code-display" id="room-code-display">
+                    </div>
+                    <button type="button" id="btn-copy-code" class="btn-sm">Copy</button>
                 </div>
-                <p class="panel-lead" style="margin-top: 1.25rem;">Select scenario</p>
-                <p id="selected-scenario-label" class="panel-lead" style="margin-top: 0; color: var(--gold); font-style: italic;"></p>
-                <div id="scenario-list" class="scenario-grid"></div>
-            </div>
-        </section>
 
-        <section id="view-join-flow" class="panel hidden">
-            <button type="button" class="btn btn--ghost" id="btn-back-entry-join" style="margin-bottom: 1rem;">← Back</button>
-            <h2 class="panel-title">Join a case</h2>
-            <p class="panel-lead">Ask your host for the room code.</p>
-            <div class="field">
+                <div class="card">
+                    <h3>Choose a case file</h3>
+                    <p id="scenario-list" class="scenario-list">
+                        <!-- Scenarios here -->
+                    </p>
+                    <h3 id="selected-scenario-label"></h3>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-join-flow" class="hidden">
+            <div class="card">
+                <button type="button" class="btn-back" id="btn-back-entry-join">&larr; Back</button>
+                <h2>Join a game</h2>
+
                 <label for="join-name">Your name</label>
-                <input type="text" id="join-name" name="displayName" autocomplete="nickname" maxlength="40" placeholder="Your name">
-            </div>
-            <div class="field">
+                <input type="text" id="join-name">
+
                 <label for="join-code">Room code</label>
-                <input type="text" id="join-code" name="roomCode" autocomplete="off" maxlength="6" placeholder="e.g. ABC12D" style="text-transform: uppercase;">
+                <input type="text" id="join-code">
+
+                <button type="button" id="btn-join-room" class="btn-primary">Join</button>
             </div>
-            <button type="button" class="btn btn--primary" id="btn-join-room">Enter lobby</button>
-        </section>
+        </div>
 
-        <section id="view-lobby" class="panel hidden">
-            <h2 class="panel-title" id="lobby-title">Lobby</h2>
-            <p class="panel-lead" id="lobby-subtitle">The host will choose a case.</p>
-            <p class="panel-lead admin-hint hidden" id="lobby-admin-hint">You are the admin — you will not receive a dossier.</p>
-            <p class="player-list-label" id="player-list-label">Guest players</p>
-            <ul id="player-list" class="player-list" aria-label="Guest players in this session"></ul>
-            <button type="button" class="btn btn--primary hidden" id="btn-start-game">Begin investigation</button>
-        </section>
+        <div id="view-lobby" class="hidden">
+            <div class="card">
+                <h2 id="lobby-title"></h2>
+                <p id="lobby-subtitle"></p>
+                <p id="lobby-admin-hint" class="hidden">As the admin, you are not a character in the game.</p>
+            </div>
 
-        <section id="view-admin" class="panel hidden admin-dashboard">
-            <h2 class="panel-title">Session control</h2>
-            <p class="panel-lead" id="admin-case-line"></p>
-            <p class="panel-lead">Investigations, targeted clues, notifications, shared documents, and agent chat will plug in here. Channels below receive live events from the server.</p>
-            <div class="admin-grid">
-                <div class="admin-card">
-                    <h3 class="admin-card__title">Investigation state</h3>
-                    <pre id="admin-investigation" class="admin-pre">—</pre>
+            <div class="card">
+                <h3 id="player-list-label"></h3>
+                <ul id="player-list"></ul>
+                <button type="button" id="btn-start-game" class="btn-primary hidden">Start game</button>
+            </div>
+        </div>
+
+        <div id="view-admin" class="hidden">
+            <div class="card">
+                <h2>Admin dashboard</h2>
+                <p id="admin-case-line"></p>
+            </div>
+
+            <div class="card">
+                <h3>Investigation data</h3>
+                <pre class="well" id="admin-investigation"></pre>
+            </div>
+
+            <div class="card">
+                <h3>Chat log</h3>
+                <div class="chat-log" id="admin-chat-log"></div>
+            </div>
+
+            <div class="card">
+                <h3>Documents</h3>
+                <ul id="admin-doc-list"></ul>
+                <p>
+                    <button type="button" id="btn-refresh-docs">Refresh</button>
+                </p>
+            </div>
+
+            <div class="card">
+                <h3>Send event</h3>
+                <p>
+                    Send a message to all players or a group of players.
+                </p>
+                <select id="event-select"></select>
+                <div id="custom-event-field" class="hidden">
+                    <textarea id="event-custom-message" rows="3"></textarea>
                 </div>
-                <div class="admin-card">
-                    <h3 class="admin-card__title">Room chat</h3>
-                    <div id="admin-chat-log" class="admin-chat-log"></div>
+                <p><strong>To players:</strong></p>
+                <div id="event-player-list" class="checkbox-group"></div>
+                <button type="button" id="btn-send-event">Send</button>
+            </div>
+        </div>
+
+        <div id="view-game" class="hidden">
+            <div class="card">
+                <div id="killer-banner" class="banner-red hidden">
+                    You are the killer. Keep your identity secret.
                 </div>
-                <div class="admin-card">
-                    <h3 class="admin-card__title">Shared documents</h3>
-                    <ul id="admin-doc-list" class="admin-doc-list"></ul>
-                    <button type="button" class="btn btn--ghost btn--small" id="btn-refresh-docs">Refresh list</button>
-                </div>
-                <div class="admin-card">
-    <h3 class="admin-card__title">Send Event</h3>
-    <div class="field">
-        <label for="event-select">Event</label>
-        <select id="event-select" name="event-select">
-            <option value="">-- Select an event --</option>
-            <option value="custom">-- Custom Message --</option>
-        </select>
-    </div>
-    <div class="field hidden" id="custom-event-field">
-        <label for="event-custom-message">Custom Message</label>
-        <input type="text" id="event-custom-message" name="event-custom-message" autocomplete="off" maxlength="100" placeholder="e.g. The lights flicker">
-    </div>
-    <div class="field">
-        <label>Target Players</label>
-        <div id="event-player-list" class="checkbox-group">
-            
+
+                <h2 id="game-case-title"></h2>
+                <h3>Your character</h3>
+                <p>
+                    <strong>Name:</strong> <span id="game-char-name"></span>
+                </p>
+                <p>
+                    <strong>Bio:</strong> <span id="game-char-bio"></span>
+                </p>
+                <p>
+                    <strong>Secret:</strong> <span id="game-char-secret"></span>
+                </p>
+            </div>
+
+            <div id="player-chat-feed" class="card chat-log hidden"></div>
         </div>
     </div>
-    <div class="btn-row">
-        <button type="button" class="btn btn--primary" id="btn-send-event">Send</button>
-    </div>
-</div>
-            </div>
-        </section>
 
-        <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+    <div class="error-banner hidden" id="global-error"></div>
 
-        <section id="view-game" class="panel hidden game-view">
-            <p class="case-label" id="game-case-title"></p>
-            <h2 class="char-name" id="game-char-name"></h2>
-            <p class="char-bio" id="game-char-bio"></p>
-            <div id="killer-banner" class="killer-banner hidden">You carry the guilt. Reveal nothing that would undo you.</div>
-            <div class="secret-block">
-                <div class="label">Your secret</div>
-                <p class="text" id="game-char-secret"></p>
-            </div>
-            <div id="player-chat-feed" class="player-chat-feed hidden" aria-label="Room messages"></div>
-        </section>
-
-        <p class="footer-note">Tips stay on this device. Do not refresh during a session.</p>
-    </div>
+    <div id="toast-stack"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/app.js"></script>
-    <!--
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then(registration => {
-                    console.log('SW registered: ', registration);
-                }).catch(registrationError => {
-                    console.log('SW registration failed: ', registrationError);
-                });
-            });
-        }
-    </script>
-    -->
 </body>
+
 </html>
