@@ -122,6 +122,13 @@
         els.toastStack.replaceChildren();
     }
 
+    function playNotificationSound() {
+        const sound = document.getElementById('notification-sound');
+        if (sound) {
+            sound.play();
+        }
+    }
+
     function pushToast(title, body) {
         if (!els.toastStack) {
             return;
@@ -144,6 +151,7 @@
         });
         t.appendChild(closeButton);
         els.toastStack.appendChild(t);
+        playNotificationSound();
     }
 
     function appendChatLine(container, from, text) {
@@ -684,7 +692,7 @@
         (res.items || []).forEach((doc) => {
             const li = document.createElement('li');
             const a = document.createElement('a');
-            a.href = doc.url || '#';
+a.href = doc.url || '#';
             a.textContent = doc.originalName || doc.url || 'Document';
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
@@ -725,6 +733,12 @@
             tryRestoreSession();
         });
     }
+
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            document.getElementById('splash-screen').style.display = 'none';
+        }, 2000);
+    });
 
     socket.on('connect', onSocketReady);
     if (socket.connected) {

@@ -1,3 +1,4 @@
+
 :root {
     --bg-deep: #07080c;
     --bg-elevated: #10131a;
@@ -748,22 +749,16 @@ input[type="text"]:focus {
 
 .toast-stack {
     position: fixed;
-    top: max(0.65rem, env(safe-area-inset-top, 0px));
+    bottom: 1rem;
+    bottom: env(safe-area-inset-bottom, 1rem);
     left: 50%;
-    right: auto;
-    bottom: auto;
     transform: translateX(-50%);
     width: min(100% - 1.5rem, 400px);
-    max-height: min(38vh, 260px);
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     z-index: 150;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     gap: 0.5rem;
     pointer-events: none;
-    padding: 0 0.25rem;
 }
 
 .toast {
@@ -778,17 +773,17 @@ input[type="text"]:focus {
     font-size: 0.88rem;
     text-align: left;
     flex-shrink: 0;
-    animation: toast-pop-in 0.28s ease-out;
+    animation: slide-in-up 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-@keyframes toast-pop-in {
+@keyframes slide-in-up {
     from {
+        transform: translateY(120%);
         opacity: 0;
-        transform: translateY(-10px) scale(0.98);
     }
     to {
+        transform: translateY(0);
         opacity: 1;
-        transform: translateY(0) scale(1);
     }
 }
 
@@ -981,4 +976,16 @@ select:focus {
 
 .btn-remove-player:hover {
     background: rgba(120, 30, 30, 0.35);
+}
+#splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-deep);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
 }

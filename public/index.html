@@ -14,9 +14,17 @@
     <link rel="icon" type="image/png" href="/img/favicon-32.png" sizes="32x32">
     <link rel="icon" type="image/png" href="/img/favicon-16.png" sizes="16x16">
     <meta name="theme-color" content="#433452">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/img/icon-192.png">
+    <link rel="apple-touch-startup-image" href="/img/splash.png">
+
 </head>
 
 <body>
+    <div id="splash-screen">
+        <img src="/img/splash.png" alt="Loading...">
+    </div>
     <div class="view-container">
         <header class="site-header">
             <div class="logo-text">M</div>
@@ -208,6 +216,7 @@
 
     <div class="error-banner hidden" id="global-error"></div>
 
+    <audio id="notification-sound" src="/sounds/notification.mp3" preload="auto"></audio>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/app.js"></script>
 </body>
