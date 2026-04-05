@@ -11,7 +11,8 @@ const { Server } = require('socket.io');
 const db = require('./data/database');
 const DatabaseService = require('./data/DatabaseService');
 const { syncScenariosFromJson } = require('./data/syncScenariosFromJson');
-const { createExtensionState } = require('./data/sessionExtensions');
+const { createExtensionState, removePlayerFromExtensions } = require('./data/sessionExtensions');
+const { schedulePersistRoom, deletePersistedRoom, loadPersistedRooms } = require('./data/roomPersistence');
 const { attachSessionFeatureHandlers } = require('./socket/sessionFeatureHandlers');
 const { timingSafeEqualToken } = require('./serverRoomUtils');
 const GameManager = require('./classes/GameManager');
@@ -73,6 +74,15 @@ function findRoomBySessionId(sessionId) {
     return null;
 }
 
+function findRoomCodeByRoom(targetRoom) {
+    for (const [code, room] of rooms.entries()) {
+        if (room === targetRoom) {
+            return code;
+        }
+    }
+    return null;
+}
+
 app.use('/uploads', express.static(uploadRoot));
 
 app.post('/api/sessions/:sessionId/upload', uploadLimiter, upload.single('file'), (req, res) => {
@@ -96,6 +106,10 @@ app.post('/api/sessions/:sessionId/upload', uploadLimiter, upload.single('file')
         uploadedAt: Date.now(),
     };
     room.extensions.documents.push(meta);
+    const uploadRoomCode = findRoomCodeByRoom(room);
+    if (uploadRoomCode) {
+        schedulePersistRoom(rooms, uploadRoomCode);
+    }
     res.json({ ok: true, document: meta });
 });
 
@@ -152,11 +166,52 @@ function getRoomOrEmitError(socket, roomCode, eventName) {
     return room;
 }
 
+function buildAdminRoster(room) {
+    if (room.game) {
+        return room.game.getAdminRoster();
+    }
+    return Array.from(room.prePlayers.values()).map((p) => ({
+        playerId: p.playerId,
+        name: p.name,
+        characterName: null,
+        isKiller: false,
+    }));
+}
+
+function emitAdminRoster(ioInstance, roomCode, room) {
+    const hostId = room.hostSocketId;
+    if (!hostId) {
+        return;
+    }
+    ioInstance.to(hostId).emit('admin:roster', { players: buildAdminRoster(room) });
+}
+
 function broadcastLobby(roomCode, room) {
     const names = room.game
         ? room.game.getPlayerNames()
         : Array.from(room.prePlayers.values()).map(p => p.name);
     io.to(roomCode).emit('lobby:players', names);
+    emitAdminRoster(io, roomCode, room);
+}
+
+/**
+ * Remove a guest player from maps, extensions, and socket room; optionally notify their socket.
+ */
+function removeGuestFromRoom(ioInstance, roomCode, room, targetSocketId, sessionEndedPayload) {
+    const players = room.game ? room.game.players : room.prePlayers;
+    if (!players.has(targetSocketId)) {
+        return false;
+    }
+    removePlayerFromExtensions(room.extensions, targetSocketId);
+    players.delete(targetSocketId);
+    const targetSock = ioInstance.sockets.sockets.get(targetSocketId);
+    if (targetSock) {
+        targetSock.leave(roomCode);
+    }
+    if (sessionEndedPayload) {
+        ioInstance.to(targetSocketId).emit('session:ended', sessionEndedPayload);
+    }
+    return true;
 }
 
 io.on('connection', (socket) => {
@@ -204,6 +259,7 @@ io.on('connection', (socket) => {
         });
         socket.emit('room:createResult', { ok: true });
         broadcastLobby(roomCode, rooms.get(roomCode));
+        schedulePersistRoom(rooms, roomCode);
     });
 
     socket.on('room:join', (payload) => {
@@ -235,6 +291,7 @@ io.on('connection', (socket) => {
             room.prePlayers.set(socket.id, player);
         }
         broadcastLobby(roomCode, room);
+        schedulePersistRoom(rooms, roomCode);
         socket.emit('room:joinResult', {
             ok: true,
             roomCode,
@@ -246,10 +303,22 @@ io.on('connection', (socket) => {
     });
 
     socket.on('session:rejoin', (payload) => {
-        const { roomCode, playerId } = payload;
-        const room = rooms.get(roomCode);
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const playerId = typeof payload?.playerId === 'string' ? payload.playerId.trim() : '';
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            socket.emit('room:joinResult', { ok: false, error: 'Could not restore your session.' });
+            return;
+        }
+        if (!/^[0-9a-f-]{36}$/i.test(playerId)) {
+            socket.emit('room:joinResult', { ok: false, error: 'Could not restore your session.' });
+            return;
+        }
 
-        if (!room) return;
+        const room = rooms.get(roomCode);
+        if (!room) {
+            socket.emit('room:joinResult', { ok: false, error: 'This room is no longer available.' });
+            return;
+        }
 
         let playerEntry = null;
         let oldSocketId = null;
@@ -264,35 +333,50 @@ io.on('connection', (socket) => {
             }
         }
 
-        if (playerEntry) {
-            if (oldSocketId) playersSource.delete(oldSocketId);
-            playerEntry.id = socket.id;
-            playersSource.set(socket.id, playerEntry);
-
-            socket.join(roomCode);
-            joinedRoom = roomCode;
-            broadcastLobby(roomCode, room);
-
-            if (room.game) {
-                room.game.reconnectPlayer(socket.id, playerEntry);
-            }
-
+        if (!playerEntry) {
             socket.emit('room:joinResult', {
-                ok: true,
-                roomCode,
-                sessionId: room.sessionId,
-                role: 'player',
-                scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
-                playerId,
+                ok: false,
+                error: 'Your seat was released. Join again with your name and room code.',
             });
+            return;
         }
+
+        if (oldSocketId) playersSource.delete(oldSocketId);
+        playerEntry.id = socket.id;
+        playersSource.set(socket.id, playerEntry);
+
+        socket.join(roomCode);
+        joinedRoom = roomCode;
+        broadcastLobby(roomCode, room);
+
+        if (room.game) {
+            room.game.reconnectPlayer(socket.id, playerEntry);
+        }
+
+        schedulePersistRoom(rooms, roomCode);
+
+        socket.emit('room:joinResult', {
+            ok: true,
+            roomCode,
+            sessionId: room.sessionId,
+            role: 'player',
+            scenarioTitle: room.scenarioMeta ? room.scenarioMeta.title : null,
+            playerId,
+            inActiveGame: !!(room.game && room.game.state === 'ACTIVE' && playerEntry.character),
+        });
     });
 
     socket.on('session:rejoinHost', (payload) => {
-        const { roomCode, hostToken } = payload;
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const hostToken = typeof payload?.hostToken === 'string' ? payload.hostToken : '';
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            socket.emit('session:ended', { message: 'Invalid session.' });
+            return;
+        }
+
         const room = rooms.get(roomCode);
 
-        if (!room || !room.hostToken || typeof hostToken !== 'string') {
+        if (!room || !room.hostToken || !hostToken) {
             socket.emit('session:ended', { message: 'Invalid session or token.' });
             return;
         }
@@ -314,8 +398,12 @@ io.on('connection', (socket) => {
                 });
 
                 if (room.scenarioMeta) {
-                    socket.emit('scenario:mountResult', { ok: true });
-                    socket.emit('scenario:mounted', { title: room.scenarioMeta.title });
+                    const gameIsActive = room.game && room.game.state === 'ACTIVE';
+                    socket.emit('scenario:mountResult', { ok: true, skipLobby: !!gameIsActive });
+                    socket.emit('scenario:mounted', {
+                        title: room.scenarioMeta.title,
+                        scenarioId: room.scenarioMeta.id,
+                    });
                 }
 
                 if (room.game && room.game.state === 'ACTIVE') {
@@ -325,7 +413,16 @@ io.on('connection', (socket) => {
                     });
                 }
 
+                if (room.extensions && room.extensions.investigations) {
+                    socket.emit('feature:investigation:sync', {
+                        version: room.extensions.investigations.version,
+                        data: room.extensions.investigations.data,
+                        sessionId: room.sessionId,
+                    });
+                }
+
                 broadcastLobby(roomCode, room);
+                schedulePersistRoom(rooms, roomCode);
             } else {
                 socket.emit('session:ended', { message: 'Session token mismatch.' });
             }
@@ -389,10 +486,12 @@ io.on('connection', (socket) => {
                     title: fullScenario.title,
                     description: fullScenario.description,
                     theme: fullScenario.theme || null,
+                    scenarioId: fullScenario.id,
                 });
 
                 broadcastLobby(roomCode, room);
                 socket.emit('scenario:mountResult', { ok: true });
+                schedulePersistRoom(rooms, roomCode);
             });
         });
     });
@@ -425,7 +524,109 @@ io.on('connection', (socket) => {
             scenarioTitle: room.game.scenario.title,
             sessionId: room.sessionId,
         });
+        emitAdminRoster(io, roomCode, room);
         socket.emit('game:startResult', { ok: true });
+        schedulePersistRoom(rooms, roomCode);
+    });
+
+    socket.on('room:leave', (payload) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            return;
+        }
+        const room = rooms.get(roomCode);
+        if (!room) {
+            return;
+        }
+        const hostToken = typeof payload?.hostToken === 'string' ? payload.hostToken : '';
+
+        if (hostToken && timingSafeEqualToken(hostToken, room.hostToken)) {
+            if (room.hostSocketId !== socket.id) {
+                return;
+            }
+            io.to(roomCode).emit('session:ended', {
+                reason: 'host_ended_session',
+                message: 'The host ended the session.',
+            });
+            rooms.delete(roomCode);
+            deletePersistedRoom(roomCode);
+            return;
+        }
+
+        const playerId = typeof payload?.playerId === 'string' ? payload.playerId.trim() : '';
+        if (!/^[0-9a-f-]{36}$/i.test(playerId)) {
+            return;
+        }
+        const players = room.game ? room.game.players : room.prePlayers;
+        const entry = players.get(socket.id);
+        if (!entry || entry.playerId !== playerId) {
+            return;
+        }
+
+        if (!removeGuestFromRoom(io, roomCode, room, socket.id, null)) {
+            return;
+        }
+        joinedRoom = null;
+        socket.emit('session:ended', {
+            reason: 'left',
+            message: 'You left the room.',
+        });
+        broadcastLobby(roomCode, room);
+        schedulePersistRoom(rooms, roomCode);
+    });
+
+    socket.on('admin:removePlayer', (payload) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const hostToken = typeof payload?.hostToken === 'string' ? payload.hostToken : '';
+        const targetPlayerId = typeof payload?.playerId === 'string' ? payload.playerId.trim() : '';
+
+        if (!/^[A-Z0-9]{6}$/.test(roomCode) || !/^[0-9a-f-]{36}$/i.test(targetPlayerId)) {
+            socket.emit('admin:removePlayerResult', { ok: false, error: 'Invalid request.' });
+            return;
+        }
+        const room = rooms.get(roomCode);
+        if (!room || !timingSafeEqualToken(hostToken, room.hostToken) || room.hostSocketId !== socket.id) {
+            socket.emit('admin:removePlayerResult', { ok: false, error: 'Not allowed.' });
+            return;
+        }
+
+        const players = room.game ? room.game.players : room.prePlayers;
+        let targetSocketId = null;
+        for (const [sid, p] of players.entries()) {
+            if (p.playerId === targetPlayerId) {
+                targetSocketId = sid;
+                break;
+            }
+        }
+        if (!targetSocketId) {
+            socket.emit('admin:removePlayerResult', { ok: false, error: 'Player not found.' });
+            return;
+        }
+
+        if (!removeGuestFromRoom(io, roomCode, room, targetSocketId, {
+            reason: 'removed_by_host',
+            message: 'The host removed you from the room.',
+        })) {
+            socket.emit('admin:removePlayerResult', { ok: false, error: 'Player not found.' });
+            return;
+        }
+
+        broadcastLobby(roomCode, room);
+        schedulePersistRoom(rooms, roomCode);
+        socket.emit('admin:removePlayerResult', { ok: true });
+    });
+
+    socket.on('admin:requestRoster', (payload) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const hostToken = typeof payload?.hostToken === 'string' ? payload.hostToken : '';
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            return;
+        }
+        const room = rooms.get(roomCode);
+        if (!room || !timingSafeEqualToken(hostToken, room.hostToken) || room.hostSocketId !== socket.id) {
+            return;
+        }
+        emitAdminRoster(io, roomCode, room);
     });
 
     socket.on('admin:event', (payload) => {
@@ -483,16 +684,19 @@ io.on('connection', (socket) => {
                     message: 'The host left; this session has ended.',
                 });
                 rooms.delete(roomCode);
+                deletePersistedRoom(roomCode);
                 return;
             }
 
             const players = room.game ? room.game.players : room.prePlayers;
             if (players && players.has(oldSocketId)) {
+                removePlayerFromExtensions(room.extensions, oldSocketId);
                 players.delete(oldSocketId);
                 broadcastLobby(roomCode, room);
+                schedulePersistRoom(rooms, roomCode);
             }
         }, 30000); // 30-second grace period
-                            });
+    });
 });
 
 db.initDatabase((err) => {
@@ -505,8 +709,14 @@ db.initDatabase((err) => {
             console.error('[sync]', e2);
             process.exit(1);
         }
-        server.listen(PORT, () => {
-            console.log(`Murder Mystery server listening on http://localhost:${PORT}`);
+        loadPersistedRooms(io, rooms, DatabaseService, GameManager, createExtensionState, (e3) => {
+            if (e3) {
+                console.error('[persist]', e3);
+                process.exit(1);
+            }
+            server.listen(PORT, () => {
+                console.log(`Murder Mystery server listening on http://localhost:${PORT}`);
+            });
         });
     });
 });

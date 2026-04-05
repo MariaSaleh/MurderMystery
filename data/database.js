@@ -57,6 +57,11 @@ function createTables(callback) {
             secret TEXT,
             FOREIGN KEY (scenario_id) REFERENCES scenarios(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS persisted_rooms (
+            room_code TEXT PRIMARY KEY,
+            data_json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
         `,
         callback
     );

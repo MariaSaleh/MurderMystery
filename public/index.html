@@ -6,6 +6,9 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Murder Mystery</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;1,500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/styles.css">
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" href="/img/favicon-32.png" sizes="32x32">
@@ -19,6 +22,8 @@
             <div class="logo-text">M</div>
             <h1>Murder Mystery</h1>
         </header>
+
+        <div id="toast-stack" class="toast-stack" aria-live="polite" aria-relevant="additions text"></div>
 
         <div id="view-entry">
             <div class="card">
@@ -67,6 +72,9 @@
                     <div class="code-display" id="room-code-display">
                     </div>
                     <button type="button" id="btn-copy-code" class="btn-sm">Copy</button>
+                    <p class="leave-actions">
+                        <button type="button" id="btn-end-host-setup" class="btn-logout">End session for everyone</button>
+                    </p>
                 </div>
 
                 <div class="card">
@@ -105,6 +113,9 @@
                 <h3 id="player-list-label"></h3>
                 <ul id="player-list"></ul>
                 <button type="button" id="btn-start-game" class="btn-primary hidden">Start game</button>
+                <p class="leave-actions">
+                    <button type="button" id="btn-leave-lobby" class="btn-logout">Leave room</button>
+                </p>
             </div>
         </div>
 
@@ -112,6 +123,26 @@
             <div class="card">
                 <h2>Admin dashboard</h2>
                 <p id="admin-case-line"></p>
+                <p class="leave-actions">
+                    <button type="button" id="btn-admin-end-session" class="btn-logout">End session for everyone</button>
+                </p>
+            </div>
+
+            <div class="card">
+                <h3>Players &amp; roles</h3>
+                <p class="admin-roster-hint">Guest display names and the character each one received (after the game starts).</p>
+                <div class="admin-roster-wrap">
+                    <table class="admin-roster-table" aria-label="Players and assigned roles">
+                        <thead>
+                            <tr>
+                                <th scope="col">Player</th>
+                                <th scope="col">Role</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-player-roster"></tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="card">
@@ -167,12 +198,15 @@
             </div>
 
             <div id="player-chat-feed" class="card chat-log hidden"></div>
+            <div class="card">
+                <p class="leave-actions">
+                    <button type="button" id="btn-leave-game" class="btn-logout">Leave game</button>
+                </p>
+            </div>
         </div>
     </div>
 
     <div class="error-banner hidden" id="global-error"></div>
-
-    <div id="toast-stack"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/app.js"></script>

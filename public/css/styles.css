@@ -101,6 +101,260 @@ body {
     display: none !important;
 }
 
+/* ----- index.html structure (view-container, cards, header) ----- */
+.view-container {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 2rem) 1.25rem 3rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.site-header {
+    text-align: center;
+    margin-bottom: 1.75rem;
+}
+
+.site-header .logo-text {
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 4vw, 1.85rem);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--gold);
+    width: 3rem;
+    height: 3rem;
+    margin: 0 auto 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--stroke);
+    background: rgba(201, 169, 98, 0.06);
+}
+
+.site-header h1 {
+    font-family: var(--font-display);
+    font-size: clamp(1.35rem, 4vw, 1.75rem);
+    font-weight: 600;
+    margin: 0;
+    color: var(--gold);
+    letter-spacing: 0.03em;
+}
+
+.card {
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius-lg);
+    padding: clamp(1.35rem, 4vw, 1.75rem);
+    box-shadow: var(--shadow);
+    text-align: left;
+}
+
+.card + .card {
+    margin-top: 1rem;
+}
+
+.card h2,
+.card h3 {
+    font-family: var(--font-display);
+    color: var(--text);
+    margin-top: 0;
+}
+
+.card h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.card h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.card label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 0.4rem;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.view-container hr {
+    border: none;
+    border-top: 1px solid var(--stroke);
+    margin: 1.25rem 0;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.95rem 1.25rem;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.2s, box-shadow 0.2s;
+    background: linear-gradient(145deg, #d4b56a 0%, #a88b4a 100%);
+    color: #0a0a0a;
+    box-shadow: 0 4px 24px rgba(201, 169, 98, 0.25);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 6px 32px rgba(201, 169, 98, 0.35);
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.view-container .card button:not(.btn-primary):not(.btn-back):not(.btn-sm):not(.scenario-card):not(.btn-logout):not(.btn-remove-player) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.95rem 1.25rem;
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--stroke);
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.view-container .card button:not(.btn-primary):not(.btn-back):not(.btn-sm):not(.scenario-card):not(.btn-logout):not(.btn-remove-player):hover {
+    color: var(--text);
+    border-color: rgba(201, 169, 98, 0.35);
+    background: rgba(201, 169, 98, 0.05);
+}
+
+.btn-back {
+    display: block;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    cursor: pointer;
+    padding: 0 0 0.75rem;
+    margin: 0 0 0.25rem;
+    text-align: left;
+    width: auto;
+    font-family: inherit;
+}
+
+.btn-back:hover {
+    color: var(--gold);
+}
+
+.btn-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.82rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--stroke);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.scenario-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.code-display {
+    font-family: ui-monospace, monospace;
+    font-size: 1.35rem;
+    letter-spacing: 0.2em;
+    text-align: center;
+    padding: 1rem;
+    margin: 0.75rem 0;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--gold);
+    min-height: 3rem;
+}
+
+.well {
+    margin: 0;
+    padding: 0.85rem;
+    font-size: 0.72rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    max-height: 140px;
+    overflow: auto;
+}
+
+.chat-log {
+    font-size: 0.82rem;
+    max-height: 160px;
+    overflow: auto;
+    color: var(--text-muted);
+    min-height: 2rem;
+}
+
+.chat-log .line {
+    margin-bottom: 0.45rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.card select,
+.card textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+.card textarea {
+    resize: vertical;
+    min-height: 4rem;
+}
+
+.error-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 0.75rem 1rem;
+    text-align: center;
+    font-size: 0.88rem;
+    z-index: 200;
+    background: rgba(232, 93, 93, 0.12);
+    border-bottom: 1px solid rgba(232, 93, 93, 0.35);
+    color: #f0a8a8;
+}
+
 .step-nav {
     display: flex;
     gap: 0.5rem;
@@ -358,7 +612,8 @@ input[type="text"]:focus {
     color: var(--text-muted);
 }
 
-.killer-banner {
+.killer-banner,
+.banner-red {
     padding: 0.85rem 1rem;
     border-radius: var(--radius-md);
     border: 1px solid rgba(232, 93, 93, 0.45);
@@ -405,18 +660,8 @@ input[type="text"]:focus {
     padding: 0;
     margin: -1px;
     overflow: hidden;
-    clip: rect(0, 0, 0, .toast-close {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-}
- 0, 0);
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
     border: 0;
 }
 
@@ -503,26 +748,67 @@ input[type="text"]:focus {
 
 .toast-stack {
     position: fixed;
-    bottom: 1rem;
+    top: max(0.65rem, env(safe-area-inset-top, 0px));
     left: 50%;
+    right: auto;
+    bottom: auto;
     transform: translateX(-50%);
-    width: min(100% - 2rem, 400px);
-    z-index: 100;
+    width: min(100% - 1.5rem, 400px);
+    max-height: min(38vh, 260px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 150;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     pointer-events: none;
+    padding: 0 0.25rem;
 }
 
 .toast {
+    position: relative;
     pointer-events: auto;
     padding: 0.85rem 1rem;
+    padding-right: 2.25rem;
     border-radius: var(--radius-md);
     background: var(--bg-elevated);
     border: 1px solid var(--stroke);
     box-shadow: var(--shadow);
     font-size: 0.88rem;
     text-align: left;
+    flex-shrink: 0;
+    animation: toast-pop-in 0.28s ease-out;
+}
+
+@keyframes toast-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast {
+        animation: none;
+    }
+}
+
+.toast-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.15rem;
 }
 
 .toast strong {
@@ -606,4 +892,93 @@ select:focus {
 
 .checkbox-item input[type="checkbox"]:checked::before {
     transform: scale(1);
+}
+
+/* Leave session & admin player roster */
+.leave-actions {
+    margin-top: 1.25rem;
+    margin-bottom: 0;
+}
+
+.btn-logout {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(232, 93, 93, 0.35);
+    background: transparent;
+    color: #e8a0a0;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-logout:hover {
+    background: rgba(232, 93, 93, 0.1);
+    border-color: rgba(232, 93, 93, 0.55);
+}
+
+.admin-roster-hint {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 0 0 0.75rem;
+}
+
+.admin-roster-wrap {
+    overflow-x: auto;
+}
+
+.admin-roster-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.admin-roster-table th {
+    text-align: left;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: 0.35rem 0.5rem 0.5rem 0;
+    border-bottom: 1px solid var(--stroke);
+}
+
+.admin-roster-table td {
+    padding: 0.6rem 0.5rem 0.6rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    vertical-align: middle;
+}
+
+.admin-roster-table td:last-child {
+    text-align: right;
+    padding-right: 0;
+    width: 5rem;
+}
+
+.admin-roster-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 0.75rem 0 !important;
+}
+
+.admin-roster-pending {
+    color: var(--text-muted);
+}
+
+.btn-remove-player {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.75rem;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 6px;
+    border: 1px solid rgba(232, 93, 93, 0.4);
+    background: rgba(80, 20, 20, 0.25);
+    color: #ffb4b4;
+}
+
+.btn-remove-player:hover {
+    background: rgba(120, 30, 30, 0.35);
 }

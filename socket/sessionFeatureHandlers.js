@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { timingSafeEqualToken } = require('../serverRoomUtils');
+const { schedulePersistRoom } = require('../data/roomPersistence');
 
 const MAX_CHAT = 2000;
 const MAX_NOTIFY_TITLE = 120;
@@ -88,6 +89,7 @@ function attachSessionFeatureHandlers(socket, io, rooms) {
             data: room.extensions.investigations.data,
             sessionId: room.sessionId,
         });
+        schedulePersistRoom(rooms, roomCode);
     });
 
     socket.on('feature:clue:give', (payload) => {
@@ -122,6 +124,7 @@ function attachSessionFeatureHandlers(socket, io, rooms) {
             text,
             sessionId: room.sessionId,
         });
+        schedulePersistRoom(rooms, roomCode);
     });
 
     socket.on('feature:notify:send', (payload) => {
@@ -164,6 +167,7 @@ function attachSessionFeatureHandlers(socket, io, rooms) {
             body,
             sessionId: room.sessionId,
         });
+        schedulePersistRoom(rooms, roomCode);
     });
 
     socket.on('feature:chat:send', (payload) => {
@@ -188,6 +192,7 @@ function attachSessionFeatureHandlers(socket, io, rooms) {
             ...entry,
             sessionId: room.sessionId,
         });
+        schedulePersistRoom(rooms, roomCode);
     });
 
     socket.on('feature:document:list', (payload) => {

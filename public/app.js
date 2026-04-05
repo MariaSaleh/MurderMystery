@@ -49,6 +49,11 @@
         eventCustomMessage: document.getElementById('event-custom-message'),
         eventPlayerList: document.getElementById('event-player-list'),
         btnSendEvent: document.getElementById('btn-send-event'),
+        btnLeaveLobby: document.getElementById('btn-leave-lobby'),
+        btnLeaveGame: document.getElementById('btn-leave-game'),
+        btnAdminEndSession: document.getElementById('btn-admin-end-session'),
+        btnEndHostSetup: document.getElementById('btn-end-host-setup'),
+        adminPlayerRoster: document.getElementById('admin-player-roster'),
     };
 
     const state = {
@@ -56,6 +61,7 @@
         roomCode: null,
         sessionId: null,
         hostToken: null,
+        playerId: null,
         selectedScenarioId: null,
         catalog: [],
     };
@@ -80,7 +86,8 @@
     }
 
     function storageKey(room) {
-        return `mm_session_${room}`;
+        const code = String(room || '').trim().toUpperCase();
+        return `mm_session_${code}`;
     }
 
     function saveSession(roomCode, data) {
@@ -106,6 +113,13 @@
         } catch {
             /* ignore */
         }
+    }
+
+    function clearToasts() {
+        if (!els.toastStack) {
+            return;
+        }
+        els.toastStack.replaceChildren();
     }
 
     function pushToast(title, body) {
@@ -157,25 +171,111 @@
         els.lobbyAdminHint.classList.toggle('hidden', !isHost);
         els.playerListLabel.textContent = isHost ? 'Guest players (receive roles)' : 'Other guests';
         els.btnStartGame.classList.toggle('hidden', !(isHost && state.mode === 'host'));
+        if (els.btnLeaveLobby) {
+            els.btnLeaveLobby.textContent = isHost ? 'End session for everyone' : 'Leave room';
+        }
+    }
+
+    function requestEndSessionAsHost() {
+        setError('');
+        if (!state.roomCode || !state.hostToken) {
+            return;
+        }
+        if (!window.confirm('End this session for all players? This cannot be undone.')) {
+            return;
+        }
+        socket.emit('room:leave', { roomCode: state.roomCode, hostToken: state.hostToken });
+    }
+
+    function requestLeaveAsPlayer() {
+        setError('');
+        if (!state.roomCode || !state.playerId) {
+            return;
+        }
+        if (!window.confirm('Leave this room? You can join again with the same code if the game is still running.')) {
+            return;
+        }
+        socket.emit('room:leave', { roomCode: state.roomCode, playerId: state.playerId });
+    }
+
+    function renderAdminRoster(payload) {
+        const tbody = els.adminPlayerRoster;
+        if (!tbody) {
+            return;
+        }
+        tbody.innerHTML = '';
+        const players = (payload && payload.players) || [];
+        if (!players.length) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 3;
+            td.className = 'admin-roster-empty';
+            td.textContent = 'No guest players in the room yet.';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+            return;
+        }
+        players.forEach((p) => {
+            const tr = document.createElement('tr');
+            const nameCell = document.createElement('td');
+            nameCell.textContent = p.name || '—';
+            const roleCell = document.createElement('td');
+            if (p.characterName) {
+                roleCell.textContent = p.isKiller ? `${p.characterName} (killer)` : p.characterName;
+            } else {
+                roleCell.textContent = '— (before roles are dealt)';
+                roleCell.className = 'admin-roster-pending';
+            }
+            const actionCell = document.createElement('td');
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-remove-player';
+            btn.textContent = 'Remove';
+            btn.addEventListener('click', () => {
+                const nm = p.name || 'this player';
+                if (!window.confirm(`Remove ${nm} from the room? They will be logged out.`)) {
+                    return;
+                }
+                socket.emit('admin:removePlayer', {
+                    roomCode: state.roomCode,
+                    hostToken: state.hostToken,
+                    playerId: p.playerId,
+                });
+            });
+            actionCell.appendChild(btn);
+            tr.appendChild(nameCell);
+            tr.appendChild(roleCell);
+            tr.appendChild(actionCell);
+            tbody.appendChild(tr);
+        });
     }
 
     function tryRestoreSession() {
+        if (!socket.connected) {
+            return;
+        }
         const roomCodeKey = Object.keys(localStorage).find(k => k.startsWith('mm_session_'));
         if (!roomCodeKey) return;
 
-        const roomCode = roomCodeKey.substring('mm_session_'.length);
+        const roomCode = roomCodeKey.substring('mm_session_'.length).trim().toUpperCase();
+        if (!/^[A-Z0-9]{6}$/.test(roomCode)) {
+            return;
+        }
         const session = loadSession(roomCode);
 
         if (session && session.playerId) {
             state.mode = 'join';
             state.roomCode = roomCode;
             state.playerId = session.playerId;
-            socket.emit('session:rejoin', { roomCode: state.roomCode, playerId: state.playerId });
+            socket.emit('session:rejoin', { roomCode, playerId: session.playerId });
         } else if (session && session.hostToken) {
             state.mode = 'host';
             state.roomCode = roomCode;
             state.hostToken = session.hostToken;
-            socket.emit('session:rejoinHost', { roomCode: state.roomCode, hostToken: state.hostToken });
+            if (session.scenarioId) {
+                state.selectedScenarioId = session.scenarioId;
+            }
+            socket.emit('session:rejoinHost', { roomCode, hostToken: session.hostToken });
         }
     }
 
@@ -292,6 +392,25 @@
         });
     }
 
+    if (els.btnLeaveLobby) {
+        els.btnLeaveLobby.addEventListener('click', () => {
+            if (state.mode === 'host') {
+                requestEndSessionAsHost();
+            } else {
+                requestLeaveAsPlayer();
+            }
+        });
+    }
+    if (els.btnLeaveGame) {
+        els.btnLeaveGame.addEventListener('click', requestLeaveAsPlayer);
+    }
+    if (els.btnAdminEndSession) {
+        els.btnAdminEndSession.addEventListener('click', requestEndSessionAsHost);
+    }
+    if (els.btnEndHostSetup) {
+        els.btnEndHostSetup.addEventListener('click', requestEndSessionAsHost);
+    }
+
     socket.on('catalog:data', (list) => {
         state.catalog = (Array.isArray(list) ? list : []).map(item => {
             if (typeof item.events_json === 'string' && item.events_json) {
@@ -348,7 +467,13 @@
         state.roomCode = data.roomCode;
         state.sessionId = data.sessionId || null;
         state.hostToken = data.hostToken;
-        saveSession(data.roomCode, { hostToken: data.hostToken });
+        const prev = loadSession(data.roomCode) || {};
+        saveSession(data.roomCode, {
+            hostToken: data.hostToken,
+            sessionId: data.sessionId || null,
+            scenarioId: state.selectedScenarioId || prev.scenarioId || null,
+        });
+        showView('hostFlow');
         els.roomCodeDisplay.textContent = data.roomCode;
         stepHost1.classList.add('hidden');
         stepHost2.classList.remove('hidden');
@@ -357,12 +482,22 @@
     socket.on('room:joinResult', (res) => {
         if (!res || !res.ok) {
             setError((res && res.error) || 'Could not join.');
+            if (state.roomCode) {
+                clearSession(state.roomCode);
+                state.roomCode = null;
+                state.playerId = null;
+                state.sessionId = null;
+            }
             return;
         }
         state.roomCode = res.roomCode;
         state.sessionId = res.sessionId || null;
         state.playerId = res.playerId || null;
-        saveSession(res.roomCode, { playerId: res.playerId });
+        saveSession(res.roomCode, { playerId: res.playerId, sessionId: res.sessionId || null });
+        // Rejoin during an active game: GAME_START is sent before this and already opened the game view.
+        if (res.inActiveGame) {
+            return;
+        }
         showLobby(false, res.scenarioTitle);
     });
 
@@ -371,11 +506,24 @@
         if (t) {
             els.lobbySubtitle.textContent = `Case file: ${t}`;
         }
+        if (state.mode === 'host' && state.roomCode && state.hostToken && info && info.scenarioId) {
+            state.selectedScenarioId = info.scenarioId;
+            const prev = loadSession(state.roomCode) || {};
+            saveSession(state.roomCode, {
+                ...prev,
+                hostToken: state.hostToken,
+                sessionId: state.sessionId || prev.sessionId || null,
+                scenarioId: info.scenarioId,
+            });
+        }
     });
 
     socket.on('scenario:mountResult', (res) => {
         if (!res || !res.ok) {
             setError((res && res.error) || 'Could not load scenario.');
+            return;
+        }
+        if (res.skipLobby && state.mode === 'host') {
             return;
         }
         const title = state.selectedScenarioId
@@ -445,10 +593,28 @@
             }
 
             requestDocumentList();
+            socket.emit('admin:requestRoster', {
+                roomCode: state.roomCode,
+                hostToken: state.hostToken,
+            });
         }
     });
 
+    socket.on('admin:roster', (payload) => {
+        if (state.mode === 'host') {
+            renderAdminRoster(payload);
+        }
+    });
+
+    socket.on('admin:removePlayerResult', (res) => {
+        if (!res || res.ok) {
+            return;
+        }
+        pushToast('Could not remove player', (res && res.error) || 'Unknown error.');
+    });
+
     socket.on('session:ended', (payload) => {
+        clearToasts();
         const msg = (payload && payload.message) || 'This session has ended.';
         setError(msg);
         if (state.roomCode) {
@@ -458,6 +624,9 @@
         state.sessionId = null;
         state.hostToken = null;
         state.playerId = null;
+        if (els.adminPlayerRoster) {
+            els.adminPlayerRoster.innerHTML = '';
+        }
         showView('entry');
         views.entry.classList.remove('hidden');
     });
@@ -538,8 +707,27 @@
         pushToast('Clue', payload.text || '');
     });
 
-    window.addEventListener('load', () => {
-        tryRestoreSession();
-        socket.emit('catalog:request');
-    });
+    let connectBootstrapPending = false;
+    function onSocketReady() {
+        if (!socket.connected) {
+            return;
+        }
+        if (connectBootstrapPending) {
+            return;
+        }
+        connectBootstrapPending = true;
+        queueMicrotask(() => {
+            connectBootstrapPending = false;
+            if (!socket.connected) {
+                return;
+            }
+            socket.emit('catalog:request');
+            tryRestoreSession();
+        });
+    }
+
+    socket.on('connect', onSocketReady);
+    if (socket.connected) {
+        onSocketReady();
+    }
 })();

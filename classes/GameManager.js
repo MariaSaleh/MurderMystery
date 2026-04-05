@@ -51,6 +51,16 @@ class GameManager {
         return Array.from(this.players.values()).map(p => p.name);
     }
 
+    /** @returns {{ playerId: string, name: string, characterName: string | null, isKiller: boolean }[]} */
+    getAdminRoster() {
+        return Array.from(this.players.values()).map((p) => ({
+            playerId: p.playerId,
+            name: p.name,
+            characterName: p.character ? p.character.name : null,
+            isKiller: !!(p.character && this.killer && p.character.name === this.killer),
+        }));
+    }
+
     startGame() {
         if (this.state !== 'LOBBY') {
             return { success: false, error: 'Game already started' };

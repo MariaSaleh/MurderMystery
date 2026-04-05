@@ -20,4 +20,26 @@ function createExtensionState() {
     };
 }
 
-module.exports = { createExtensionState };
+/**
+ * Drop clues and notifications targeting a disconnected or removed player socket.
+ * @param {ReturnType<createExtensionState>} extensions
+ * @param {string} removedSocketId
+ */
+function removePlayerFromExtensions(extensions, removedSocketId) {
+    if (!extensions || !removedSocketId) {
+        return;
+    }
+    const clues = extensions.clues || {};
+    for (const key of Object.keys(clues)) {
+        if (clues[key].targetSocketId === removedSocketId) {
+            delete clues[key];
+        }
+    }
+    if (Array.isArray(extensions.notificationLog)) {
+        extensions.notificationLog = extensions.notificationLog.filter(
+            (n) => n.targetSocketId !== removedSocketId
+        );
+    }
+}
+
+module.exports = { createExtensionState, removePlayerFromExtensions };
